@@ -1,0 +1,9 @@
+version: "3"
+services:
+  rust-gtk:
+    build:
+      context: ./
+    volumes:
+      - ../gtk-playground/:/mnt:z
+    command: /bin/bash -c "cargo build --release"
+
