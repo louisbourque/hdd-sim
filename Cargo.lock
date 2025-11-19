@@ -376,20 +376,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gtk-playground"
-version = "0.1.0"
-dependencies = [
- "crossbeam-utils",
- "dirs",
- "gdk4",
- "gio",
- "glib",
- "gtk4",
- "libadwaita",
- "regex",
-]
-
-[[package]]
 name = "gtk4"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -446,6 +432,20 @@ name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
+
+[[package]]
+name = "hdd-simulator"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-utils",
+ "dirs",
+ "gdk4",
+ "gio",
+ "glib",
+ "gtk4",
+ "libadwaita",
+ "regex",
+]
 
 [[package]]
 name = "heck"
