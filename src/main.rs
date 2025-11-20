@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
@@ -15,6 +16,7 @@ const APP_ID: &str = "ca.rusticotter.hdd-simulator";
 struct Drive {
     name: String,
     model: String,
+    enabled: bool,
 }
 
 fn main() -> glib::ExitCode {
@@ -85,6 +87,7 @@ fn scan_hard_drives() -> Vec<Drive> {
                 drives.push(Drive {
                     name: device_str,
                     model: display_name,
+                    enabled: false,
                 });
             }
         }
@@ -101,10 +104,10 @@ fn build_ui(application: &Application) {
     let list_box = ListBox::builder().css_classes(vec!["sidebar"]).build();
 
     // Store drives in a shared container for access in callbacks
-    let drives_rc = Rc::new(drives);
+    let drives_rc = Rc::new(RefCell::new(drives));
 
     // Create drive list items
-    if drives_rc.is_empty() {
+    if drives_rc.borrow().is_empty() {
         let label = Label::builder()
             .label("No hard drives found")
             .margin_top(12)
@@ -114,7 +117,7 @@ fn build_ui(application: &Application) {
             .build();
         list_box.append(&label);
     } else {
-        for drive in drives_rc.iter() {
+        for drive in drives_rc.borrow().iter() {
             let row = ListBoxRow::builder().build();
 
             // Create a box to hold the drive info
@@ -176,11 +179,6 @@ fn build_ui(application: &Application) {
     let empty_state = create_empty_state_view();
     settings_container.append(&empty_state);
 
-    // Create settings view (initially hidden)
-    let settings_view = create_settings_view();
-    settings_view.set_visible(false);
-    settings_container.append(&settings_view);
-
     // Ensure settings_container expands to fill available space
     settings_container.set_halign(gtk::Align::Fill);
     settings_container.set_valign(gtk::Align::Fill);
@@ -204,25 +202,34 @@ fn build_ui(application: &Application) {
     paned.set_end_child(Some(&right_scrolled));
 
     // Handle drive selection
-    let settings_view_clone = settings_view.clone();
     let empty_state_clone = empty_state.clone();
+    let settings_container_clone = settings_container.clone();
     let drives_clone = drives_rc.clone();
     list_box.connect_row_selected(move |_, row| {
+        // Remove existing settings view if present
+        // empty_state is always the first child, so if last_child != first_child, remove it
+        if let (Some(first_child), Some(last_child)) = (
+            settings_container_clone.first_child(),
+            settings_container_clone.last_child(),
+        ) && first_child != last_child
+        {
+            settings_container_clone.remove(&last_child);
+        }
+
         if let Some(row) = row {
             let drive_index = row.index() as usize;
-            if let Some(drive) = drives_clone.get(drive_index) {
-                update_settings_view(&settings_view_clone, drive);
+            if let Some(drive) = drives_clone.borrow().get(drive_index) {
+                // Create and add new settings view with drive state
+                let settings_view = create_settings_view(drive, drive_index, drives_clone.clone());
+                settings_container_clone.append(&settings_view);
                 empty_state_clone.set_visible(false);
-                settings_view_clone.set_visible(true);
             } else {
                 // No drive found - show empty state
                 empty_state_clone.set_visible(true);
-                settings_view_clone.set_visible(false);
             }
         } else {
             // No selection - show empty state
             empty_state_clone.set_visible(true);
-            settings_view_clone.set_visible(false);
         }
     });
 
@@ -315,7 +322,7 @@ fn create_empty_state_view() -> Box {
     outer_container
 }
 
-fn create_settings_view() -> Box {
+fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Vec<Drive>>>) -> Box {
     let container = Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(24)
@@ -351,9 +358,17 @@ fn create_settings_view() -> Box {
         .build();
 
     let toggle_switch = Switch::builder()
-        .active(true)
+        .active(drive.enabled)
         .halign(gtk::Align::End)
         .build();
+
+    // Connect toggle switch to update drive.enabled when state changes
+    let drives_clone = drives.clone();
+    toggle_switch.connect_state_set(move |_switch, new_state| {
+        // new_state is the state being set, use it directly
+        drives_clone.borrow_mut()[drive_index].enabled = new_state;
+        glib::Propagation::Proceed
+    });
 
     toggle_row.append(&toggle_label);
     toggle_row.append(&toggle_switch);
@@ -364,10 +379,4 @@ fn create_settings_view() -> Box {
     container.append(&settings_section);
 
     container
-}
-
-fn update_settings_view(_settings_view: &Box, _drive: &Drive) {
-    // For now, we just show the settings view
-    // In the future, we can update specific settings based on the drive
-    // The toggle state can be managed per-drive if needed
 }
