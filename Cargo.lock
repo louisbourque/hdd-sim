@@ -445,6 +445,8 @@ dependencies = [
  "gtk4",
  "libadwaita",
  "regex",
+ "serde",
+ "toml",
 ]
 
 [[package]]

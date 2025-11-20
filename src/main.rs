@@ -1,6 +1,7 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use gdk4::Key;
@@ -9,6 +10,7 @@ use gtk::{
     Application, ApplicationWindow, Box, EventControllerKey, Label, ListBox, ListBoxRow, Paned,
     ScrolledWindow, Switch, glib,
 };
+use serde::{Deserialize, Serialize};
 
 const APP_ID: &str = "ca.rusticotter.hdd-simulator";
 
@@ -17,6 +19,16 @@ struct Drive {
     name: String,
     model: String,
     enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct DriveConfig {
+    enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Config {
+    drives: HashMap<String, DriveConfig>,
 }
 
 fn main() -> glib::ExitCode {
@@ -53,13 +65,83 @@ fn get_drive_model(device_path: &Path) -> Option<String> {
     None
 }
 
-fn scan_hard_drives() -> Vec<Drive> {
+fn get_config_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|mut path| {
+        path.push("hdd-simulator");
+        path.push("config.toml");
+        path
+    })
+}
+
+fn load_config() -> Config {
+    let config_path = match get_config_path() {
+        Some(path) => path,
+        None => {
+            return Config {
+                drives: HashMap::new(),
+            };
+        }
+    };
+
+    if !config_path.exists() {
+        return Config {
+            drives: HashMap::new(),
+        };
+    }
+
+    match fs::read_to_string(&config_path) {
+        Ok(content) => match toml::from_str(&content) {
+            Ok(config) => config,
+            Err(e) => {
+                eprintln!("Failed to parse config file: {}", e);
+                Config {
+                    drives: HashMap::new(),
+                }
+            }
+        },
+        Err(e) => {
+            eprintln!("Failed to read config file: {}", e);
+            Config {
+                drives: HashMap::new(),
+            }
+        }
+    }
+}
+
+fn save_config(config: &Config) {
+    let config_path = match get_config_path() {
+        Some(path) => path,
+        None => {
+            eprintln!("Failed to get config directory");
+            return;
+        }
+    };
+
+    if let Some(parent) = config_path.parent()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        eprintln!("Failed to create config directory: {}", e);
+        return;
+    }
+
+    match toml::to_string_pretty(config) {
+        Ok(content) => {
+            if let Err(e) = fs::write(&config_path, content) {
+                eprintln!("Failed to write config file: {}", e);
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to serialize config: {}", e);
+        }
+    }
+}
+
+fn scan_hard_drives(config: &Config) -> Vec<Drive> {
     let sys_block = Path::new("/sys/block");
     let mut drives = Vec::new();
 
     if let Ok(entries) = fs::read_dir(sys_block) {
         for entry in entries.flatten() {
-            dbg!(&entry);
             let device_name = entry.file_name();
             let device_str = device_name.to_string_lossy().to_string();
 
@@ -84,10 +166,15 @@ fn scan_hard_drives() -> Vec<Drive> {
                 // Try to get the model name, fall back to device name if not available
                 let display_name =
                     get_drive_model(&entry.path()).unwrap_or_else(|| device_str.clone());
+                let enabled = config
+                    .drives
+                    .get(&device_str)
+                    .map(|drive_config| drive_config.enabled)
+                    .unwrap_or(false);
                 drives.push(Drive {
                     name: device_str,
                     model: display_name,
-                    enabled: false,
+                    enabled,
                 });
             }
         }
@@ -98,7 +185,8 @@ fn scan_hard_drives() -> Vec<Drive> {
 }
 
 fn build_ui(application: &Application) {
-    let drives = scan_hard_drives();
+    let config = load_config();
+    let drives = scan_hard_drives(&config);
 
     // Create the left sidebar with drive list
     let list_box = ListBox::builder().css_classes(vec!["sidebar"]).build();
@@ -367,6 +455,21 @@ fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Ve
     toggle_switch.connect_state_set(move |_switch, new_state| {
         // new_state is the state being set, use it directly
         drives_clone.borrow_mut()[drive_index].enabled = new_state;
+
+        // Save config to persist the change
+        let mut config = Config {
+            drives: HashMap::new(),
+        };
+        for drive in drives_clone.borrow().iter() {
+            config.drives.insert(
+                drive.name.clone(),
+                DriveConfig {
+                    enabled: drive.enabled,
+                },
+            );
+        }
+        save_config(&config);
+
         glib::Propagation::Proceed
     });
 
