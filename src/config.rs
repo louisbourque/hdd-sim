@@ -5,8 +5,25 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct DriveConfig {
     pub enabled: bool,
+    pub read: bool,
+    pub write: bool,
+    pub tone: u8,
+    pub volume: u8,
+}
+
+impl Default for DriveConfig {
+    fn default() -> Self {
+        DriveConfig {
+            enabled: false,
+            read: false,
+            write: false,
+            tone: 1,
+            volume: 50,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -8,8 +8,8 @@ use std::rc::Rc;
 use gdk4::Key;
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Box, EventControllerKey, Label, ListBox, ListBoxRow, Paned,
-    ScrolledWindow, Switch, glib,
+    Application, ApplicationWindow, Box, DropDown, EventControllerKey, Label, ListBox, ListBoxRow,
+    Paned, Scale, ScrolledWindow, StringList, Switch, glib,
 };
 
 use config::{Config, DriveConfig, load_config, save_config};
@@ -87,10 +87,8 @@ fn scan_hard_drives(config: &Config) -> Vec<Drive> {
                 // Try to get the model name, fall back to device name if not available
                 let display_name =
                     get_drive_model(&entry.path()).unwrap_or_else(|| device_str.clone());
-                let config = config
-                    .drives
-                    .get(&device_str)
-                    .unwrap_or(&DriveConfig { enabled: false });
+                let default_config = DriveConfig::default();
+                let config = config.drives.get(&device_str).unwrap_or(&default_config);
                 drives.push(Drive {
                     name: device_str,
                     model: display_name,
@@ -330,6 +328,18 @@ fn create_empty_state_view() -> Box {
     outer_container
 }
 
+fn save_drives_config(drives: &Rc<RefCell<Vec<Drive>>>) {
+    let mut config = Config {
+        drives: std::collections::HashMap::new(),
+    };
+    for drive in drives.borrow().iter() {
+        config
+            .drives
+            .insert(drive.name.clone(), drive.config.to_owned());
+    }
+    save_config(&config);
+}
+
 fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Vec<Drive>>>) -> Box {
     let container = Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -347,54 +357,203 @@ fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Ve
         .build();
 
     let section_title = Label::builder()
-        .label("Settings")
+        .label(format!("{} Settings", drive.model))
         .css_classes(vec!["title-2"])
         .halign(gtk::Align::Start)
         .build();
 
-    // Enable/Disable toggle
-    let toggle_row = Box::builder()
+    // Enabled toggle
+    let enabled_row = Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(12)
         .halign(gtk::Align::Fill)
         .hexpand(true)
         .build();
 
-    let toggle_label = Label::builder()
+    let enabled_label = Label::builder()
         .label("Enabled")
         .halign(gtk::Align::Start)
         .build();
 
-    let toggle_switch = Switch::builder()
+    let enabled_switch = Switch::builder()
         .active(drive.config.enabled)
         .halign(gtk::Align::End)
         .build();
 
-    // Connect toggle switch to update drive.enabled when state changes
-    let drives_clone = drives.clone();
-    toggle_switch.connect_state_set(move |_switch, new_state| {
-        // new_state is the state being set, use it directly
-        drives_clone.borrow_mut()[drive_index].config.enabled = new_state;
+    enabled_row.append(&enabled_label);
+    enabled_row.append(&enabled_switch);
 
-        // Save config to persist the change
-        let mut config = Config {
-            drives: std::collections::HashMap::new(),
+    // Read toggle
+    let read_row = Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .halign(gtk::Align::Fill)
+        .hexpand(true)
+        .build();
+
+    let read_label = Label::builder()
+        .label("Read")
+        .halign(gtk::Align::Start)
+        .build();
+
+    let read_switch = Switch::builder()
+        .active(drive.config.read)
+        .halign(gtk::Align::End)
+        .sensitive(drive.config.enabled)
+        .build();
+
+    let drives_clone = drives.clone();
+    read_switch.connect_state_set(move |_switch, new_state| {
+        drives_clone.borrow_mut()[drive_index].config.read = new_state;
+        save_drives_config(&drives_clone);
+        glib::Propagation::Proceed
+    });
+
+    read_row.append(&read_label);
+    read_row.append(&read_switch);
+
+    // Write toggle
+    let write_row = Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .halign(gtk::Align::Fill)
+        .hexpand(true)
+        .build();
+
+    let write_label = Label::builder()
+        .label("Write")
+        .halign(gtk::Align::Start)
+        .build();
+
+    let write_switch = Switch::builder()
+        .active(drive.config.write)
+        .halign(gtk::Align::End)
+        .sensitive(drive.config.enabled)
+        .build();
+
+    let drives_clone = drives.clone();
+    write_switch.connect_state_set(move |_switch, new_state| {
+        drives_clone.borrow_mut()[drive_index].config.write = new_state;
+        save_drives_config(&drives_clone);
+        glib::Propagation::Proceed
+    });
+
+    write_row.append(&write_label);
+    write_row.append(&write_switch);
+
+    // Volume slider (0-100)
+    let volume_row = Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .halign(gtk::Align::Fill)
+        .hexpand(true)
+        .build();
+
+    let volume_label = Label::builder()
+        .label("Volume")
+        .halign(gtk::Align::Start)
+        .build();
+
+    let volume_value_label = Label::builder()
+        .label(drive.config.volume.to_string())
+        .halign(gtk::Align::End)
+        .width_chars(3)
+        .build();
+
+    let adjustment = gtk::Adjustment::new(drive.config.volume as f64, 0.0, 100.0, 1.0, 5.0, 0.0);
+
+    let volume_scale = Scale::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .adjustment(&adjustment)
+        .draw_value(false)
+        .hexpand(true)
+        .width_request(100)
+        .sensitive(drive.config.enabled)
+        .build();
+
+    let drives_clone = drives.clone();
+    let volume_value_label_clone = volume_value_label.clone();
+    volume_scale.connect_value_changed(move |scale| {
+        let value = scale.value() as u8;
+        volume_value_label_clone.set_label(&format!("{}", value));
+        drives_clone.borrow_mut()[drive_index].config.volume = value;
+        save_drives_config(&drives_clone);
+    });
+
+    volume_row.append(&volume_label);
+    volume_row.append(&volume_scale);
+    volume_row.append(&volume_value_label);
+
+    // Tone dropdown (A=1, B=2, C=3)
+    let tone_row = Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .halign(gtk::Align::Fill)
+        .hexpand(true)
+        .build();
+
+    let tone_label = Label::builder()
+        .label("Tone")
+        .halign(gtk::Align::Start)
+        .build();
+
+    let tone_options = StringList::new(&["A", "B", "C"]);
+    let tone_dropdown = DropDown::builder()
+        .model(&tone_options)
+        .halign(gtk::Align::Start)
+        .sensitive(drive.config.enabled)
+        .build();
+
+    // Set initial selection based on tone value (1=A, 2=B, 3=C)
+    let initial_selection = match drive.config.tone {
+        1 => 0u32,
+        2 => 1u32,
+        3 => 2u32,
+        _ => 0u32, // Default to A if invalid
+    };
+    tone_dropdown.set_selected(initial_selection);
+
+    let drives_clone = drives.clone();
+    tone_dropdown.connect_selected_notify(move |dropdown| {
+        let selected = dropdown.selected();
+        let tone_value = match selected {
+            0 => 1u8, // A
+            1 => 2u8, // B
+            2 => 3u8, // C
+            _ => 1u8, // Default to A
         };
-        for drive in drives_clone.borrow().iter() {
-            config
-                .drives
-                .insert(drive.name.clone(), drive.config.to_owned());
-        }
-        save_config(&config);
+        drives_clone.borrow_mut()[drive_index].config.tone = tone_value;
+        save_drives_config(&drives_clone);
+    });
+
+    tone_row.append(&tone_label);
+    tone_row.append(&tone_dropdown);
+
+    // Connect enabled switch to update sensitivity of all other settings
+    let read_switch_clone = read_switch.clone();
+    let write_switch_clone = write_switch.clone();
+    let volume_scale_clone = volume_scale.clone();
+    let tone_dropdown_clone = tone_dropdown.clone();
+    let drives_clone = drives.clone();
+    enabled_switch.connect_state_set(move |_switch, new_state| {
+        drives_clone.borrow_mut()[drive_index].config.enabled = new_state;
+        save_drives_config(&drives_clone);
+
+        // Update sensitivity of all settings based on enabled state
+        read_switch_clone.set_sensitive(new_state);
+        write_switch_clone.set_sensitive(new_state);
+        volume_scale_clone.set_sensitive(new_state);
+        tone_dropdown_clone.set_sensitive(new_state);
 
         glib::Propagation::Proceed
     });
 
-    toggle_row.append(&toggle_label);
-    toggle_row.append(&toggle_switch);
-
     settings_section.append(&section_title);
-    settings_section.append(&toggle_row);
+    settings_section.append(&enabled_row);
+    settings_section.append(&read_row);
+    settings_section.append(&write_row);
+    settings_section.append(&volume_row);
+    settings_section.append(&tone_row);
 
     container.append(&settings_section);
 
