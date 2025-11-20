@@ -1,4 +1,5 @@
 mod config;
+mod monitor;
 
 use std::cell::RefCell;
 use std::fs;
@@ -13,6 +14,7 @@ use gtk::{
 };
 
 use config::{Config, DriveConfig, load_config, save_config};
+use monitor::Monitor;
 
 const APP_ID: &str = "ca.rusticotter.hdd-simulator";
 
@@ -106,11 +108,16 @@ fn build_ui(application: &Application) {
     let config = load_config();
     let drives = scan_hard_drives(&config);
 
+    // Create and start the monitor
+    let monitor = Monitor::new();
+    monitor.update_config(&config);
+
     // Create the left sidebar with drive list
     let list_box = ListBox::builder().css_classes(vec!["sidebar"]).build();
 
     // Store drives in a shared container for access in callbacks
     let drives_rc = Rc::new(RefCell::new(drives));
+    let monitor_rc = Rc::new(monitor);
 
     // Create drive list items
     if drives_rc.borrow().is_empty() {
@@ -211,6 +218,7 @@ fn build_ui(application: &Application) {
     let empty_state_clone = empty_state.clone();
     let settings_container_clone = settings_container.clone();
     let drives_clone = drives_rc.clone();
+    let monitor_clone_for_selection = monitor_rc.clone();
     list_box.connect_row_selected(move |_, row| {
         // Remove existing settings view if present
         // empty_state is always the first child, so if last_child != first_child, remove it
@@ -226,7 +234,12 @@ fn build_ui(application: &Application) {
             let drive_index = row.index() as usize;
             if let Some(drive) = drives_clone.borrow().get(drive_index) {
                 // Create and add new settings view with drive state
-                let settings_view = create_settings_view(drive, drive_index, drives_clone.clone());
+                let settings_view = create_settings_view(
+                    drive,
+                    drive_index,
+                    drives_clone.clone(),
+                    monitor_clone_for_selection.clone(),
+                );
                 settings_container_clone.append(&settings_view);
                 empty_state_clone.set_visible(false);
             } else {
@@ -328,7 +341,7 @@ fn create_empty_state_view() -> Box {
     outer_container
 }
 
-fn save_drives_config(drives: &Rc<RefCell<Vec<Drive>>>) {
+fn save_drives_config(drives: &Rc<RefCell<Vec<Drive>>>, monitor: &Monitor) {
     let mut config = Config {
         drives: std::collections::HashMap::new(),
     };
@@ -338,9 +351,15 @@ fn save_drives_config(drives: &Rc<RefCell<Vec<Drive>>>) {
             .insert(drive.name.clone(), drive.config.to_owned());
     }
     save_config(&config);
+    monitor.update_config(&config);
 }
 
-fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Vec<Drive>>>) -> Box {
+fn create_settings_view(
+    drive: &Drive,
+    drive_index: usize,
+    drives: Rc<RefCell<Vec<Drive>>>,
+    monitor: Rc<Monitor>,
+) -> Box {
     let container = Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(24)
@@ -403,9 +422,10 @@ fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Ve
         .build();
 
     let drives_clone = drives.clone();
+    let monitor_clone = monitor.clone();
     read_switch.connect_state_set(move |_switch, new_state| {
         drives_clone.borrow_mut()[drive_index].config.read = new_state;
-        save_drives_config(&drives_clone);
+        save_drives_config(&drives_clone, &monitor_clone);
         glib::Propagation::Proceed
     });
 
@@ -432,9 +452,10 @@ fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Ve
         .build();
 
     let drives_clone = drives.clone();
+    let monitor_clone = monitor.clone();
     write_switch.connect_state_set(move |_switch, new_state| {
         drives_clone.borrow_mut()[drive_index].config.write = new_state;
-        save_drives_config(&drives_clone);
+        save_drives_config(&drives_clone, &monitor_clone);
         glib::Propagation::Proceed
     });
 
@@ -472,12 +493,13 @@ fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Ve
         .build();
 
     let drives_clone = drives.clone();
+    let monitor_clone = monitor.clone();
     let volume_value_label_clone = volume_value_label.clone();
     volume_scale.connect_value_changed(move |scale| {
         let value = scale.value() as u8;
         volume_value_label_clone.set_label(&format!("{}", value));
         drives_clone.borrow_mut()[drive_index].config.volume = value;
-        save_drives_config(&drives_clone);
+        save_drives_config(&drives_clone, &monitor_clone);
     });
 
     volume_row.append(&volume_label);
@@ -514,6 +536,7 @@ fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Ve
     tone_dropdown.set_selected(initial_selection);
 
     let drives_clone = drives.clone();
+    let monitor_clone = monitor.clone();
     tone_dropdown.connect_selected_notify(move |dropdown| {
         let selected = dropdown.selected();
         let tone_value = match selected {
@@ -523,7 +546,7 @@ fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Ve
             _ => 1u8, // Default to A
         };
         drives_clone.borrow_mut()[drive_index].config.tone = tone_value;
-        save_drives_config(&drives_clone);
+        save_drives_config(&drives_clone, &monitor_clone);
     });
 
     tone_row.append(&tone_label);
@@ -535,9 +558,10 @@ fn create_settings_view(drive: &Drive, drive_index: usize, drives: Rc<RefCell<Ve
     let volume_scale_clone = volume_scale.clone();
     let tone_dropdown_clone = tone_dropdown.clone();
     let drives_clone = drives.clone();
+    let monitor_clone = monitor.clone();
     enabled_switch.connect_state_set(move |_switch, new_state| {
         drives_clone.borrow_mut()[drive_index].config.enabled = new_state;
-        save_drives_config(&drives_clone);
+        save_drives_config(&drives_clone, &monitor_clone);
 
         // Update sensitivity of all settings based on enabled state
         read_switch_clone.set_sensitive(new_state);
