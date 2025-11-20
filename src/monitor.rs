@@ -7,17 +7,19 @@ use std::time::Duration;
 
 use crate::config::{Config, DriveConfig};
 
-const POLL_INTERVAL_MS: u64 = 50;
-
 #[derive(Debug, Clone)]
 pub struct MonitorConfig {
     pub drives: HashMap<String, DriveConfig>,
+    pub active: bool,
+    pub poll_interval_ms: u64,
 }
 
 impl From<&Config> for MonitorConfig {
     fn from(config: &Config) -> Self {
         MonitorConfig {
             drives: config.drives.clone(),
+            active: config.active,
+            poll_interval_ms: config.poll_interval_ms,
         }
     }
 }
@@ -58,6 +60,8 @@ impl Monitor {
         thread::spawn(move || {
             let mut current_config = MonitorConfig {
                 drives: HashMap::new(),
+                active: true,
+                poll_interval_ms: 100,
             };
             let mut previous_stats: HashMap<String, DriveStats> = HashMap::new();
 
@@ -69,48 +73,53 @@ impl Monitor {
                     previous_stats.clear();
                 }
 
-                // Monitor enabled drives
-                for (device_name, drive_config) in &current_config.drives {
-                    if !drive_config.enabled {
-                        continue;
-                    }
-
-                    let Some(current_stats) = parse_drive_stat(device_name) else {
-                        continue;
-                    };
-
-                    if let Some(prev_stats) = previous_stats.get(device_name) {
-                        // Check for read activity
-                        if drive_config.read && current_stats.read_ios > prev_stats.read_ios {
-                            let sectors = current_stats.read_sectors - prev_stats.read_sectors;
-                            let timestamp = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs();
-                            eprintln!(
-                                "[{}] {}: READ activity detected (sectors: {})",
-                                timestamp, device_name, sectors
-                            );
+                // Only monitor if active
+                if current_config.active {
+                    // Monitor enabled drives
+                    for (device_name, drive_config) in &current_config.drives {
+                        if !drive_config.enabled {
+                            continue;
                         }
 
-                        // Check for write activity
-                        if drive_config.write && current_stats.write_ios > prev_stats.write_ios {
-                            let sectors = current_stats.write_sectors - prev_stats.write_sectors;
-                            let timestamp = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs();
-                            eprintln!(
-                                "[{}] {}: WRITE activity detected (sectors: {})",
-                                timestamp, device_name, sectors
-                            );
-                        }
-                    }
+                        let Some(current_stats) = parse_drive_stat(device_name) else {
+                            continue;
+                        };
 
-                    previous_stats.insert(device_name.clone(), current_stats);
+                        if let Some(prev_stats) = previous_stats.get(device_name) {
+                            // Check for read activity
+                            if drive_config.read && current_stats.read_ios > prev_stats.read_ios {
+                                let sectors = current_stats.read_sectors - prev_stats.read_sectors;
+                                let timestamp = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs();
+                                eprintln!(
+                                    "[{}] {}: READ activity detected (sectors: {})",
+                                    timestamp, device_name, sectors
+                                );
+                            }
+
+                            // Check for write activity
+                            if drive_config.write && current_stats.write_ios > prev_stats.write_ios
+                            {
+                                let sectors =
+                                    current_stats.write_sectors - prev_stats.write_sectors;
+                                let timestamp = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs();
+                                eprintln!(
+                                    "[{}] {}: WRITE activity detected (sectors: {})",
+                                    timestamp, device_name, sectors
+                                );
+                            }
+                        }
+
+                        previous_stats.insert(device_name.clone(), current_stats);
+                    }
                 }
 
-                thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
+                thread::sleep(Duration::from_millis(current_config.poll_interval_ms));
             }
         });
 

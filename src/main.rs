@@ -9,8 +9,8 @@ use std::rc::Rc;
 use gdk4::Key;
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Box, DropDown, EventControllerKey, Label, ListBox, ListBoxRow,
-    Paned, Scale, ScrolledWindow, StringList, Switch, glib,
+    Application, ApplicationWindow, Box, Button, DropDown, EventControllerKey, Label, ListBox,
+    ListBoxRow, Paned, Scale, ScrolledWindow, StringList, Switch, glib,
 };
 
 use config::{Config, DriveConfig, load_config, save_config};
@@ -214,11 +214,30 @@ fn build_ui(application: &Application) {
     paned.set_start_child(Some(&left_scrolled));
     paned.set_end_child(Some(&right_scrolled));
 
+    // Create main container with paned and global settings
+    let main_container = Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .build();
+    paned.set_vexpand(true);
+    main_container.append(&paned);
+
+    // Create global settings section
+    let config_rc = Rc::new(RefCell::new(config));
+    let monitor_clone_for_global = monitor_rc.clone();
+    let drives_clone_for_global = drives_rc.clone();
+    let global_settings = create_global_settings_view(
+        config_rc.clone(),
+        monitor_clone_for_global,
+        drives_clone_for_global,
+    );
+    main_container.append(&global_settings);
+
     // Handle drive selection
     let empty_state_clone = empty_state.clone();
     let settings_container_clone = settings_container.clone();
     let drives_clone = drives_rc.clone();
     let monitor_clone_for_selection = monitor_rc.clone();
+    let config_clone_for_selection = config_rc.clone();
     list_box.connect_row_selected(move |_, row| {
         // Remove existing settings view if present
         // empty_state is always the first child, so if last_child != first_child, remove it
@@ -239,6 +258,7 @@ fn build_ui(application: &Application) {
                     drive_index,
                     drives_clone.clone(),
                     monitor_clone_for_selection.clone(),
+                    config_clone_for_selection.clone(),
                 );
                 settings_container_clone.append(&settings_view);
                 empty_state_clone.set_visible(false);
@@ -257,7 +277,7 @@ fn build_ui(application: &Application) {
         .title("HDD Simulator")
         .default_width(800)
         .default_height(600)
-        .child(&paned)
+        .child(&main_container)
         .build();
 
     // Handle ESC key to unselect all rows
@@ -341,9 +361,16 @@ fn create_empty_state_view() -> Box {
     outer_container
 }
 
-fn save_drives_config(drives: &Rc<RefCell<Vec<Drive>>>, monitor: &Monitor) {
+fn save_full_config(
+    drives: &Rc<RefCell<Vec<Drive>>>,
+    global_config: &Rc<RefCell<Config>>,
+    monitor: &Monitor,
+) {
+    let config_borrow = global_config.borrow();
     let mut config = Config {
         drives: std::collections::HashMap::new(),
+        active: config_borrow.active,
+        poll_interval_ms: config_borrow.poll_interval_ms,
     };
     for drive in drives.borrow().iter() {
         config
@@ -359,6 +386,7 @@ fn create_settings_view(
     drive_index: usize,
     drives: Rc<RefCell<Vec<Drive>>>,
     monitor: Rc<Monitor>,
+    global_config: Rc<RefCell<Config>>,
 ) -> Box {
     let container = Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -423,9 +451,10 @@ fn create_settings_view(
 
     let drives_clone = drives.clone();
     let monitor_clone = monitor.clone();
+    let global_config_clone = global_config.clone();
     read_switch.connect_state_set(move |_switch, new_state| {
         drives_clone.borrow_mut()[drive_index].config.read = new_state;
-        save_drives_config(&drives_clone, &monitor_clone);
+        save_full_config(&drives_clone, &global_config_clone, &monitor_clone);
         glib::Propagation::Proceed
     });
 
@@ -453,9 +482,10 @@ fn create_settings_view(
 
     let drives_clone = drives.clone();
     let monitor_clone = monitor.clone();
+    let global_config_clone = global_config.clone();
     write_switch.connect_state_set(move |_switch, new_state| {
         drives_clone.borrow_mut()[drive_index].config.write = new_state;
-        save_drives_config(&drives_clone, &monitor_clone);
+        save_full_config(&drives_clone, &global_config_clone, &monitor_clone);
         glib::Propagation::Proceed
     });
 
@@ -494,12 +524,13 @@ fn create_settings_view(
 
     let drives_clone = drives.clone();
     let monitor_clone = monitor.clone();
+    let global_config_clone = global_config.clone();
     let volume_value_label_clone = volume_value_label.clone();
     volume_scale.connect_value_changed(move |scale| {
         let value = scale.value() as u8;
         volume_value_label_clone.set_label(&format!("{}", value));
         drives_clone.borrow_mut()[drive_index].config.volume = value;
-        save_drives_config(&drives_clone, &monitor_clone);
+        save_full_config(&drives_clone, &global_config_clone, &monitor_clone);
     });
 
     volume_row.append(&volume_label);
@@ -537,6 +568,7 @@ fn create_settings_view(
 
     let drives_clone = drives.clone();
     let monitor_clone = monitor.clone();
+    let global_config_clone = global_config.clone();
     tone_dropdown.connect_selected_notify(move |dropdown| {
         let selected = dropdown.selected();
         let tone_value = match selected {
@@ -546,7 +578,7 @@ fn create_settings_view(
             _ => 1u8, // Default to A
         };
         drives_clone.borrow_mut()[drive_index].config.tone = tone_value;
-        save_drives_config(&drives_clone, &monitor_clone);
+        save_full_config(&drives_clone, &global_config_clone, &monitor_clone);
     });
 
     tone_row.append(&tone_label);
@@ -559,9 +591,10 @@ fn create_settings_view(
     let tone_dropdown_clone = tone_dropdown.clone();
     let drives_clone = drives.clone();
     let monitor_clone = monitor.clone();
+    let global_config_clone = global_config.clone();
     enabled_switch.connect_state_set(move |_switch, new_state| {
         drives_clone.borrow_mut()[drive_index].config.enabled = new_state;
-        save_drives_config(&drives_clone, &monitor_clone);
+        save_full_config(&drives_clone, &global_config_clone, &monitor_clone);
 
         // Update sensitivity of all settings based on enabled state
         read_switch_clone.set_sensitive(new_state);
@@ -580,6 +613,96 @@ fn create_settings_view(
     settings_section.append(&tone_row);
 
     container.append(&settings_section);
+
+    container
+}
+
+fn create_global_settings_view(
+    config: Rc<RefCell<Config>>,
+    monitor: Rc<Monitor>,
+    drives: Rc<RefCell<Vec<Drive>>>,
+) -> Box {
+    let container = Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .margin_start(24)
+        .margin_end(24)
+        .margin_top(12)
+        .margin_bottom(12)
+        .halign(gtk::Align::Fill)
+        .css_classes(vec!["global-settings"])
+        .build();
+
+    // Play/Pause button for Active state
+    let active_button = Button::builder()
+        .icon_name(if config.borrow().active {
+            "media-playback-pause-symbolic"
+        } else {
+            "media-playback-start-symbolic"
+        })
+        .build();
+
+    let config_clone = config.clone();
+    let monitor_clone = monitor.clone();
+    let drives_clone = drives.clone();
+    active_button.connect_clicked(move |button| {
+        let mut config_borrow = config_clone.borrow_mut();
+        config_borrow.active = !config_borrow.active;
+        let is_active = config_borrow.active;
+        button.set_icon_name(if is_active {
+            "media-playback-pause-symbolic"
+        } else {
+            "media-playback-start-symbolic"
+        });
+        drop(config_borrow);
+        save_full_config(&drives_clone, &config_clone, &monitor_clone);
+    });
+
+    // Interval label
+    let interval_label = Label::builder()
+        .label("Interval")
+        .halign(gtk::Align::Start)
+        .build();
+
+    // Interval value label
+    let interval_value_label = Label::builder()
+        .label(format!("{}ms", config.borrow().poll_interval_ms))
+        .halign(gtk::Align::End)
+        .width_chars(6)
+        .build();
+
+    // Interval slider (50ms - 5000ms)
+    let adjustment = gtk::Adjustment::new(
+        config.borrow().poll_interval_ms as f64,
+        50.0,
+        5000.0,
+        10.0,
+        100.0,
+        0.0,
+    );
+
+    let interval_scale = Scale::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .adjustment(&adjustment)
+        .draw_value(false)
+        .width_request(200)
+        .build();
+
+    let config_clone = config.clone();
+    let monitor_clone = monitor.clone();
+    let drives_clone = drives.clone();
+    let interval_value_label_clone = interval_value_label.clone();
+    interval_scale.connect_value_changed(move |scale| {
+        let value = scale.value() as u64;
+        interval_value_label_clone.set_label(&format!("{}ms", value));
+        config_clone.borrow_mut().poll_interval_ms = value;
+        save_full_config(&drives_clone, &config_clone, &monitor_clone);
+    });
+
+    container.append(&active_button);
+    container.append(&interval_label);
+    container.append(&interval_scale);
+    container.append(&interval_value_label);
 
     container
 }

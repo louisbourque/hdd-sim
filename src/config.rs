@@ -27,8 +27,21 @@ impl Default for DriveConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Config {
     pub drives: HashMap<String, DriveConfig>,
+    pub active: bool,
+    pub poll_interval_ms: u64,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            drives: HashMap::new(),
+            active: true,
+            poll_interval_ms: 100,
+        }
+    }
 }
 
 fn get_config_path() -> Option<PathBuf> {
@@ -43,16 +56,12 @@ pub fn load_config() -> Config {
     let config_path = match get_config_path() {
         Some(path) => path,
         None => {
-            return Config {
-                drives: HashMap::new(),
-            };
+            return Config::default();
         }
     };
 
     if !config_path.exists() {
-        return Config {
-            drives: HashMap::new(),
-        };
+        return Config::default();
     }
 
     match fs::read_to_string(&config_path) {
@@ -60,16 +69,12 @@ pub fn load_config() -> Config {
             Ok(config) => config,
             Err(e) => {
                 eprintln!("Failed to parse config file: {}", e);
-                Config {
-                    drives: HashMap::new(),
-                }
+                Config::default()
             }
         },
         Err(e) => {
             eprintln!("Failed to read config file: {}", e);
-            Config {
-                drives: HashMap::new(),
-            }
+            Config::default()
         }
     }
 }
