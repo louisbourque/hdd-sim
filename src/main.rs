@@ -400,7 +400,7 @@ fn create_settings_view(
     // Settings section
     let settings_section = Box::builder()
         .orientation(gtk::Orientation::Vertical)
-        .spacing(12)
+        .spacing(20)
         .build();
 
     let section_title = Label::builder()
@@ -409,7 +409,7 @@ fn create_settings_view(
         .halign(gtk::Align::Start)
         .build();
 
-    // Enabled toggle
+    // Enabled toggle (separate section)
     let enabled_row = Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(12)
@@ -420,6 +420,7 @@ fn create_settings_view(
     let enabled_label = Label::builder()
         .label("Enabled")
         .halign(gtk::Align::Start)
+        .width_chars(8)
         .build();
 
     let enabled_switch = Switch::builder()
@@ -429,6 +430,12 @@ fn create_settings_view(
 
     enabled_row.append(&enabled_label);
     enabled_row.append(&enabled_switch);
+
+    // Group Read and Write together for better visual alignment
+    let io_settings_group = Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(12)
+        .build();
 
     // Read toggle
     let read_row = Box::builder()
@@ -441,6 +448,7 @@ fn create_settings_view(
     let read_label = Label::builder()
         .label("Read")
         .halign(gtk::Align::Start)
+        .width_chars(8)
         .build();
 
     let read_switch = Switch::builder()
@@ -472,6 +480,7 @@ fn create_settings_view(
     let write_label = Label::builder()
         .label("Write")
         .halign(gtk::Align::Start)
+        .width_chars(8)
         .build();
 
     let write_switch = Switch::builder()
@@ -492,6 +501,9 @@ fn create_settings_view(
     write_row.append(&write_label);
     write_row.append(&write_switch);
 
+    io_settings_group.append(&read_row);
+    io_settings_group.append(&write_row);
+
     // Volume slider (0-100)
     let volume_row = Box::builder()
         .orientation(gtk::Orientation::Horizontal)
@@ -503,6 +515,7 @@ fn create_settings_view(
     let volume_label = Label::builder()
         .label("Volume")
         .halign(gtk::Align::Start)
+        .width_chars(8)
         .build();
 
     let volume_value_label = Label::builder()
@@ -558,8 +571,7 @@ fn create_settings_view(
 
     settings_section.append(&section_title);
     settings_section.append(&enabled_row);
-    settings_section.append(&read_row);
-    settings_section.append(&write_row);
+    settings_section.append(&io_settings_group);
     settings_section.append(&volume_row);
 
     container.append(&settings_section);
@@ -574,11 +586,11 @@ fn create_global_settings_view(
 ) -> Box {
     let container = Box::builder()
         .orientation(gtk::Orientation::Horizontal)
-        .spacing(12)
+        .spacing(16)
         .margin_start(24)
         .margin_end(24)
-        .margin_top(12)
-        .margin_bottom(12)
+        .margin_top(16)
+        .margin_bottom(16)
         .halign(gtk::Align::Fill)
         .css_classes(vec!["global-settings"])
         .build();
@@ -608,10 +620,19 @@ fn create_global_settings_view(
         save_full_config(&drives_clone, &config_clone, &monitor_clone);
     });
 
+    // Interval section with better alignment
+    let interval_row = Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .halign(gtk::Align::Fill)
+        .hexpand(true)
+        .build();
+
     // Interval label
     let interval_label = Label::builder()
         .label("Interval")
         .halign(gtk::Align::Start)
+        .width_chars(8)
         .build();
 
     // Interval value label
@@ -638,6 +659,7 @@ fn create_global_settings_view(
         .orientation(gtk::Orientation::Horizontal)
         .adjustment(&adjustment)
         .draw_value(false)
+        .hexpand(true)
         .width_request(200)
         .build();
 
@@ -652,10 +674,12 @@ fn create_global_settings_view(
         save_full_config(&drives_clone, &config_clone, &monitor_clone);
     });
 
+    interval_row.append(&interval_label);
+    interval_row.append(&interval_scale);
+    interval_row.append(&interval_value_label);
+
     container.append(&active_button);
-    container.append(&interval_label);
-    container.append(&interval_scale);
-    container.append(&interval_value_label);
+    container.append(&interval_row);
 
     container
 }
