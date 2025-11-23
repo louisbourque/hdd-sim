@@ -64,14 +64,18 @@ struct ClickSound {
     delay_buffer_pos: usize,
     // Low-pass filter state for muffling effect
     lowpass_state: f32,
+    // Volume multiplier (0.0 to 1.0)
+    volume: f32,
 }
 
 impl ClickSound {
-    fn new(sample_rate: u32, duration_ms: u32) -> Self {
+    fn new(sample_rate: u32, duration_ms: u32, volume: u8) -> Self {
         let duration_samples = (sample_rate as u64 * duration_ms as u64 / 1000) as u32;
         // Create delay buffer for echo (approximately 5-10ms delays)
         let delay_samples = (sample_rate as f32 * 0.008) as usize; // 8ms delay
         let delay_buffer = vec![0.0; delay_samples];
+        // Convert volume from 0-100 to 0.0-1.0 multiplier
+        let volume_multiplier = volume as f32 / 100.0;
         ClickSound {
             sample_rate,
             duration_samples,
@@ -79,6 +83,7 @@ impl ClickSound {
             delay_buffer,
             delay_buffer_pos: 0,
             lowpass_state: 0.0,
+            volume: volume_multiplier,
         }
     }
 }
@@ -150,7 +155,8 @@ impl Iterator for ClickSound {
         let longer_echo = self.delay_buffer[longer_delay_pos] * 0.15;
         let final_signal = echo_signal + longer_echo;
 
-        Some(0.5 * final_signal)
+        // Apply volume multiplier to the final signal
+        Some(0.5 * final_signal * self.volume)
     }
 }
 
@@ -176,7 +182,7 @@ impl Source for ClickSound {
 
 // Helper to play click sound (non-blocking)
 // Plays multiple times based on sector count: >5000 = 3 times, >1000 = 2 times, otherwise = 1 time
-fn play_click(stream_handle: &OutputStreamHandle, sectors: u64) {
+fn play_click(stream_handle: &OutputStreamHandle, sectors: u64, volume: u8) {
     let click_count = if sectors > 5000 {
         3
     } else if sectors > 1000 {
@@ -188,6 +194,7 @@ fn play_click(stream_handle: &OutputStreamHandle, sectors: u64) {
     for i in 0..click_count {
         let handle = stream_handle.clone();
         let delay_ms = i * 30; // 30ms delay between clicks
+        let volume_clone = volume;
 
         thread::spawn(move || {
             if delay_ms > 0 {
@@ -196,7 +203,7 @@ fn play_click(stream_handle: &OutputStreamHandle, sectors: u64) {
 
             match Sink::try_new(&handle) {
                 Ok(sink) => {
-                    let click = ClickSound::new(44100, 25);
+                    let click = ClickSound::new(44100, 25, volume_clone);
                     sink.append(click);
                     sink.sleep_until_end();
                 }
@@ -270,7 +277,7 @@ impl Monitor {
                                 );
                                 match stream_handle_opt {
                                     Some(ref handle) => {
-                                        play_click(handle, sectors);
+                                        play_click(handle, sectors, drive_config.volume);
                                     }
                                     None => eprintln!(
                                         "Warning: Audio stream handle not available, cannot play click sound"
@@ -293,7 +300,7 @@ impl Monitor {
                                 );
                                 match stream_handle_opt {
                                     Some(ref handle) => {
-                                        play_click(handle, sectors);
+                                        play_click(handle, sectors, drive_config.volume);
                                     }
                                     None => eprintln!(
                                         "Warning: Audio stream handle not available, cannot play click sound"
