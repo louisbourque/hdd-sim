@@ -83,16 +83,36 @@ impl Iterator for ClickSound {
         let t = self.current_sample as f32 / self.sample_rate as f32;
         self.current_sample += 1;
 
-        // Generate a short click: brief sine wave burst with exponential decay
-        // This creates a "tick" sound similar to a hard drive click
-        let frequency = 2000.0; // 2kHz click
-        let phase = 2.0 * std::f32::consts::PI * frequency * t;
+        // Generate a heavy, clunky mechanical sound
+        let base_frequency = 40.0; // Lower frequency for clunk sound
+        let phase = 2.0 * std::f32::consts::PI * base_frequency * t;
 
-        // Exponential decay envelope for natural sound
-        let envelope = (-t * 30.0).exp(); // Fast decay
+        // Strong fundamental for heavy bass
+        let fundamental = phase.sin() * 2.0;
 
-        // Short burst of sine wave
-        Some(0.3 * envelope * phase.sin())
+        // Strong subharmonic for deep, heavy thunk
+        let subharmonic = (phase * 0.5).sin() * 0.6;
+
+        // Add harmonics for mechanical character (kept minimal to emphasize bass)
+        let second_harmonic = (2.0 * phase).sin() * 0.15;
+        let third_harmonic = (3.0 * phase).sin() * 0.08;
+
+        // Add low-frequency noise for mechanical texture
+        let noise = (t * 100.0).sin() * 0.1;
+
+        // Combine all components
+        let clunk_signal = fundamental + subharmonic + second_harmonic + third_harmonic + noise;
+
+        // Very sharp attack (almost instant impact), then slower decay for heavy feel
+        let attack_time = 0.0003; // 0.3ms - very sharp attack
+        let envelope = if t < attack_time {
+            t / attack_time // Linear attack
+        } else {
+            // Slower decay for heavier, more sustained clunk
+            (-(t - attack_time) * 18.0).exp()
+        };
+
+        Some(0.5 * envelope * clunk_signal)
     }
 }
 
@@ -117,19 +137,36 @@ impl Source for ClickSound {
 }
 
 // Helper to play click sound (non-blocking)
-fn play_click(stream_handle: &OutputStreamHandle) {
-    match Sink::try_new(stream_handle) {
-        Ok(sink) => {
-            let click = ClickSound::new(44100, 15); // 15ms click at 44.1kHz
-            sink.append(click);
-            // Spawn a thread to keep the sink alive until playback completes
-            thread::spawn(move || {
-                sink.sleep_until_end();
-            });
-        }
-        Err(e) => {
-            eprintln!("Error creating sink for click sound: {:?}", e);
-        }
+// Plays multiple times based on sector count: >5000 = 3 times, >1000 = 2 times, otherwise = 1 time
+fn play_click(stream_handle: &OutputStreamHandle, sectors: u64) {
+    let click_count = if sectors > 5000 {
+        3
+    } else if sectors > 1000 {
+        2
+    } else {
+        1
+    };
+
+    for i in 0..click_count {
+        let handle = stream_handle.clone();
+        let delay_ms = i * 30; // 30ms delay between clicks
+
+        thread::spawn(move || {
+            if delay_ms > 0 {
+                thread::sleep(Duration::from_millis(delay_ms));
+            }
+
+            match Sink::try_new(&handle) {
+                Ok(sink) => {
+                    let click = ClickSound::new(44100, 25);
+                    sink.append(click);
+                    sink.sleep_until_end();
+                }
+                Err(e) => {
+                    eprintln!("Error creating sink for click sound: {:?}", e);
+                }
+            }
+        });
     }
 }
 
@@ -195,7 +232,7 @@ impl Monitor {
                                 );
                                 match stream_handle_opt {
                                     Some(ref handle) => {
-                                        play_click(handle);
+                                        play_click(handle, sectors);
                                     }
                                     None => eprintln!(
                                         "Warning: Audio stream handle not available, cannot play click sound"
@@ -218,7 +255,7 @@ impl Monitor {
                                 );
                                 match stream_handle_opt {
                                     Some(ref handle) => {
-                                        play_click(handle);
+                                        play_click(handle, sectors);
                                     }
                                     None => eprintln!(
                                         "Warning: Audio stream handle not available, cannot play click sound"
