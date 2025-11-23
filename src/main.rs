@@ -621,15 +621,18 @@ fn create_global_settings_view(
         .width_chars(6)
         .build();
 
-    // Interval slider (50ms - 5000ms)
-    let adjustment = gtk::Adjustment::new(
-        config.borrow().poll_interval_ms as f64,
-        50.0,
-        5000.0,
-        10.0,
-        100.0,
-        0.0,
-    );
+    // Interval slider (50ms - 1000ms)
+    let current_value = config.borrow().poll_interval_ms as f64;
+    let clamped_value = current_value.clamp(50.0, 1000.0);
+
+    // Update config if value was clamped
+    if (clamped_value as u64) != config.borrow().poll_interval_ms {
+        config.borrow_mut().poll_interval_ms = clamped_value as u64;
+        interval_value_label.set_label(&format!("{}ms", clamped_value as u64));
+        save_full_config(&drives, &config, &monitor);
+    }
+
+    let adjustment = gtk::Adjustment::new(clamped_value, 50.0, 1000.0, 10.0, 100.0, 0.0);
 
     let interval_scale = Scale::builder()
         .orientation(gtk::Orientation::Horizontal)
