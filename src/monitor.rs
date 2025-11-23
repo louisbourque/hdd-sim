@@ -59,15 +59,26 @@ struct ClickSound {
     sample_rate: u32,
     duration_samples: u32,
     current_sample: u32,
+    // Echo/reverb delay buffer (stores samples for delayed mixing)
+    delay_buffer: Vec<f32>,
+    delay_buffer_pos: usize,
+    // Low-pass filter state for muffling effect
+    lowpass_state: f32,
 }
 
 impl ClickSound {
     fn new(sample_rate: u32, duration_ms: u32) -> Self {
         let duration_samples = (sample_rate as u64 * duration_ms as u64 / 1000) as u32;
+        // Create delay buffer for echo (approximately 5-10ms delays)
+        let delay_samples = (sample_rate as f32 * 0.008) as usize; // 8ms delay
+        let delay_buffer = vec![0.0; delay_samples];
         ClickSound {
             sample_rate,
             duration_samples,
             current_sample: 0,
+            delay_buffer,
+            delay_buffer_pos: 0,
+            lowpass_state: 0.0,
         }
     }
 }
@@ -83,7 +94,7 @@ impl Iterator for ClickSound {
         let t = self.current_sample as f32 / self.sample_rate as f32;
         self.current_sample += 1;
 
-        // Generate a heavy, clunky mechanical sound with sharp attack
+        // Generate a heavy, clunky mechanical sound (muffled as if inside a drive enclosure)
         let base_frequency = 40.0; // Lower frequency for clunk sound
         let phase = 2.0 * std::f32::consts::PI * base_frequency * t;
 
@@ -93,36 +104,18 @@ impl Iterator for ClickSound {
         // Strong subharmonic for deep, heavy thunk
         let subharmonic = (phase * 0.5).sin() * 0.6;
 
-        // Add harmonics for mechanical character with stronger high frequencies for sharpness
-        let second_harmonic = (2.0 * phase).sin() * 0.25;
-        let third_harmonic = (3.0 * phase).sin() * 0.18;
-        let fourth_harmonic = (4.0 * phase).sin() * 0.12;
-        let fifth_harmonic = (5.0 * phase).sin() * 0.08;
-        let sixth_harmonic = (6.0 * phase).sin() * 0.05;
+        // Reduced harmonics for muffled effect (high frequencies are damped by enclosure)
+        let second_harmonic = (2.0 * phase).sin() * 0.12;
+        let third_harmonic = (3.0 * phase).sin() * 0.06;
 
         // Add low-frequency noise for mechanical texture
-        let noise = (t * 100.0).sin() * 0.1;
+        let noise = (t * 100.0).sin() * 0.08;
 
-        // High-frequency transient for sharp attack (only at the very beginning)
-        let high_freq_transient = if t < 0.001 {
-            (2.0 * std::f32::consts::PI * 2000.0 * t).sin() * 0.3 * (1.0 - t * 1000.0)
-        } else {
-            0.0
-        };
+        // Combine all components (no high-frequency transients - muffled by enclosure)
+        let raw_signal = fundamental + subharmonic + second_harmonic + third_harmonic + noise;
 
-        // Combine all components
-        let clunk_signal = fundamental
-            + subharmonic
-            + second_harmonic
-            + third_harmonic
-            + fourth_harmonic
-            + fifth_harmonic
-            + sixth_harmonic
-            + noise
-            + high_freq_transient;
-
-        // Ultra-sharp attack (almost instant impact), then slower decay for heavy feel
-        let attack_time = 0.0001; // 0.1ms - ultra-sharp attack
+        // Apply envelope
+        let attack_time = 0.0001; // 0.1ms - sharp attack
         let envelope = if t < attack_time {
             // Exponential attack for sharper onset
             (t / attack_time * 3.0).exp() / (3.0_f32.exp())
@@ -131,7 +124,33 @@ impl Iterator for ClickSound {
             (-(t - attack_time) * 18.0).exp()
         };
 
-        Some(0.5 * envelope * clunk_signal)
+        let dry_signal = envelope * raw_signal;
+
+        // Apply low-pass filter for muffling effect (simulates sound damped by drive enclosure)
+        // Simple first-order low-pass filter
+        let cutoff = 800.0; // Low cutoff frequency for muffled sound
+        let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff);
+        let dt = 1.0 / self.sample_rate as f32;
+        let alpha = dt / (rc + dt);
+        self.lowpass_state = alpha * dry_signal + (1.0 - alpha) * self.lowpass_state;
+        let muffled_signal = self.lowpass_state;
+
+        // Add echo/reverb effect (sound bouncing inside the drive enclosure)
+        let echo_delay = self.delay_buffer[self.delay_buffer_pos];
+        let echo_amount = 0.35; // Amount of echo
+        let echo_signal = muffled_signal + echo_delay * echo_amount;
+
+        // Store current sample in delay buffer for echo
+        self.delay_buffer[self.delay_buffer_pos] = muffled_signal * 0.6; // Slightly reduced for natural decay
+        self.delay_buffer_pos = (self.delay_buffer_pos + 1) % self.delay_buffer.len();
+
+        // Additional subtle echo (longer delay)
+        let longer_delay_pos =
+            (self.delay_buffer_pos + self.delay_buffer.len() / 2) % self.delay_buffer.len();
+        let longer_echo = self.delay_buffer[longer_delay_pos] * 0.15;
+        let final_signal = echo_signal + longer_echo;
+
+        Some(0.5 * final_signal)
     }
 }
 
