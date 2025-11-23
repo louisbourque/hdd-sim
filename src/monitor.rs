@@ -83,7 +83,7 @@ impl Iterator for ClickSound {
         let t = self.current_sample as f32 / self.sample_rate as f32;
         self.current_sample += 1;
 
-        // Generate a heavy, clunky mechanical sound
+        // Generate a heavy, clunky mechanical sound with sharp attack
         let base_frequency = 40.0; // Lower frequency for clunk sound
         let phase = 2.0 * std::f32::consts::PI * base_frequency * t;
 
@@ -93,20 +93,39 @@ impl Iterator for ClickSound {
         // Strong subharmonic for deep, heavy thunk
         let subharmonic = (phase * 0.5).sin() * 0.6;
 
-        // Add harmonics for mechanical character (kept minimal to emphasize bass)
-        let second_harmonic = (2.0 * phase).sin() * 0.15;
-        let third_harmonic = (3.0 * phase).sin() * 0.08;
+        // Add harmonics for mechanical character with stronger high frequencies for sharpness
+        let second_harmonic = (2.0 * phase).sin() * 0.25;
+        let third_harmonic = (3.0 * phase).sin() * 0.18;
+        let fourth_harmonic = (4.0 * phase).sin() * 0.12;
+        let fifth_harmonic = (5.0 * phase).sin() * 0.08;
+        let sixth_harmonic = (6.0 * phase).sin() * 0.05;
 
         // Add low-frequency noise for mechanical texture
         let noise = (t * 100.0).sin() * 0.1;
 
-        // Combine all components
-        let clunk_signal = fundamental + subharmonic + second_harmonic + third_harmonic + noise;
+        // High-frequency transient for sharp attack (only at the very beginning)
+        let high_freq_transient = if t < 0.001 {
+            (2.0 * std::f32::consts::PI * 2000.0 * t).sin() * 0.3 * (1.0 - t * 1000.0)
+        } else {
+            0.0
+        };
 
-        // Very sharp attack (almost instant impact), then slower decay for heavy feel
-        let attack_time = 0.0003; // 0.3ms - very sharp attack
+        // Combine all components
+        let clunk_signal = fundamental
+            + subharmonic
+            + second_harmonic
+            + third_harmonic
+            + fourth_harmonic
+            + fifth_harmonic
+            + sixth_harmonic
+            + noise
+            + high_freq_transient;
+
+        // Ultra-sharp attack (almost instant impact), then slower decay for heavy feel
+        let attack_time = 0.0001; // 0.1ms - ultra-sharp attack
         let envelope = if t < attack_time {
-            t / attack_time // Linear attack
+            // Exponential attack for sharper onset
+            (t / attack_time * 3.0).exp() / (3.0_f32.exp())
         } else {
             // Slower decay for heavier, more sustained clunk
             (-(t - attack_time) * 18.0).exp()
