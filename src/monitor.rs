@@ -182,9 +182,10 @@ impl Source for ClickSound {
 
 // Helper to play click sound (non-blocking)
 // Plays multiple times based on sector count: >5000 = 3 times, >1000 = 2 times, otherwise = 1 time
+// Capped at 20 clicks max to avoid spawning excessive threads
 fn play_click(stream_handle: &OutputStreamHandle, sectors: u64, volume: u8) {
     let click_count = if sectors > 10000 {
-        sectors / 10000
+        (sectors / 10000).min(20)
     } else if sectors > 5000 {
         2
     } else if sectors > 1000 {
