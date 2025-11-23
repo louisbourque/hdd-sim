@@ -9,8 +9,8 @@ use std::rc::Rc;
 use gdk4::Key;
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Box, Button, DropDown, EventControllerKey, Label, ListBox,
-    ListBoxRow, Paned, Scale, ScrolledWindow, StringList, Switch, glib,
+    Application, ApplicationWindow, Box, Button, EventControllerKey, Label, ListBox, ListBoxRow,
+    Paned, Scale, ScrolledWindow, Switch, glib,
 };
 
 use config::{Config, DriveConfig, load_config, save_config};
@@ -537,58 +537,10 @@ fn create_settings_view(
     volume_row.append(&volume_scale);
     volume_row.append(&volume_value_label);
 
-    // Tone dropdown (A=1, B=2, C=3)
-    let tone_row = Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
-        .spacing(12)
-        .halign(gtk::Align::Fill)
-        .hexpand(true)
-        .build();
-
-    let tone_label = Label::builder()
-        .label("Tone")
-        .halign(gtk::Align::Start)
-        .build();
-
-    let tone_options = StringList::new(&["A", "B", "C"]);
-    let tone_dropdown = DropDown::builder()
-        .model(&tone_options)
-        .halign(gtk::Align::Start)
-        .sensitive(drive.config.enabled)
-        .build();
-
-    // Set initial selection based on tone value (1=A, 2=B, 3=C)
-    let initial_selection = match drive.config.tone {
-        1 => 0u32,
-        2 => 1u32,
-        3 => 2u32,
-        _ => 0u32, // Default to A if invalid
-    };
-    tone_dropdown.set_selected(initial_selection);
-
-    let drives_clone = drives.clone();
-    let monitor_clone = monitor.clone();
-    let global_config_clone = global_config.clone();
-    tone_dropdown.connect_selected_notify(move |dropdown| {
-        let selected = dropdown.selected();
-        let tone_value = match selected {
-            0 => 1u8, // A
-            1 => 2u8, // B
-            2 => 3u8, // C
-            _ => 1u8, // Default to A
-        };
-        drives_clone.borrow_mut()[drive_index].config.tone = tone_value;
-        save_full_config(&drives_clone, &global_config_clone, &monitor_clone);
-    });
-
-    tone_row.append(&tone_label);
-    tone_row.append(&tone_dropdown);
-
     // Connect enabled switch to update sensitivity of all other settings
     let read_switch_clone = read_switch.clone();
     let write_switch_clone = write_switch.clone();
     let volume_scale_clone = volume_scale.clone();
-    let tone_dropdown_clone = tone_dropdown.clone();
     let drives_clone = drives.clone();
     let monitor_clone = monitor.clone();
     let global_config_clone = global_config.clone();
@@ -600,7 +552,6 @@ fn create_settings_view(
         read_switch_clone.set_sensitive(new_state);
         write_switch_clone.set_sensitive(new_state);
         volume_scale_clone.set_sensitive(new_state);
-        tone_dropdown_clone.set_sensitive(new_state);
 
         glib::Propagation::Proceed
     });
@@ -610,7 +561,6 @@ fn create_settings_view(
     settings_section.append(&read_row);
     settings_section.append(&write_row);
     settings_section.append(&volume_row);
-    settings_section.append(&tone_row);
 
     container.append(&settings_section);
 

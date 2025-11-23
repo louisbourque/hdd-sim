@@ -10,7 +10,6 @@ pub struct DriveConfig {
     pub enabled: bool,
     pub read: bool,
     pub write: bool,
-    pub tone: u8,
     pub volume: u8,
 }
 
@@ -20,7 +19,6 @@ impl Default for DriveConfig {
             enabled: false,
             read: false,
             write: false,
-            tone: 1,
             volume: 50,
         }
     }
