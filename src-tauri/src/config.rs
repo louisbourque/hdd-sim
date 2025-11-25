@@ -104,3 +104,4 @@ pub fn save_config(config: &Config) {
         }
     }
 }
+
