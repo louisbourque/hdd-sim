@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::config::{Config, DriveConfig};
 use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
+use tokio::time;
 
 #[derive(Debug, Clone)]
 pub struct MonitorConfig {
@@ -182,8 +183,13 @@ impl Source for ClickSound {
 
 // Helper to play click sound (non-blocking)
 // Plays multiple times based on sector count: >5000 = 3 times, >1000 = 2 times, otherwise = 1 time
-// Capped at 20 clicks max to avoid spawning excessive threads
-fn play_click(stream_handle: &OutputStreamHandle, sectors: u64, volume: u8) {
+// Capped at 20 clicks max to avoid spawning excessive tasks
+fn play_click(
+    runtime_handle: &tokio::runtime::Handle,
+    stream_handle: &OutputStreamHandle,
+    sectors: u64,
+    volume: u8,
+) {
     let click_count = if sectors > 10000 {
         (sectors / 10000).min(20)
     } else if sectors > 5000 {
@@ -199,16 +205,20 @@ fn play_click(stream_handle: &OutputStreamHandle, sectors: u64, volume: u8) {
         let delay_ms = i * 30; // 30ms delay between clicks
         let volume_clone = volume;
 
-        thread::spawn(move || {
+        runtime_handle.spawn(async move {
             if delay_ms > 0 {
-                thread::sleep(Duration::from_millis(delay_ms));
+                time::sleep(Duration::from_millis(delay_ms)).await;
             }
 
             match Sink::try_new(&handle) {
                 Ok(sink) => {
                     let click = ClickSound::new(44100, 25, volume_clone);
                     sink.append(click);
-                    sink.sleep_until_end();
+                    tokio::task::spawn_blocking(move || {
+                        sink.sleep_until_end();
+                    })
+                    .await
+                    .ok();
                 }
                 Err(e) => {
                     eprintln!("Error creating sink for click sound: {:?}", e);
@@ -223,6 +233,10 @@ impl Monitor {
         let (config_sender, config_receiver) = mpsc::channel();
 
         thread::spawn(move || {
+            // Create tokio runtime for async tasks
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+            let handle = rt.handle().clone();
+
             // Initialize audio output once for the entire monitoring thread
             // We must keep the OutputStream alive for the handle to remain valid
             let (stream_opt, stream_handle_opt) = match OutputStream::try_default() {
@@ -279,8 +293,13 @@ impl Monitor {
                                     timestamp, device_name, sectors
                                 );
                                 match stream_handle_opt {
-                                    Some(ref handle) => {
-                                        play_click(handle, sectors, drive_config.volume);
+                                    Some(ref audio_handle) => {
+                                        play_click(
+                                            &handle,
+                                            audio_handle,
+                                            sectors,
+                                            drive_config.volume,
+                                        );
                                     }
                                     None => eprintln!(
                                         "Warning: Audio stream handle not available, cannot play click sound"
@@ -302,8 +321,13 @@ impl Monitor {
                                     timestamp, device_name, sectors
                                 );
                                 match stream_handle_opt {
-                                    Some(ref handle) => {
-                                        play_click(handle, sectors, drive_config.volume);
+                                    Some(ref audio_handle) => {
+                                        play_click(
+                                            &handle,
+                                            audio_handle,
+                                            sectors,
+                                            drive_config.volume,
+                                        );
                                     }
                                     None => eprintln!(
                                         "Warning: Audio stream handle not available, cannot play click sound"

@@ -17,6 +17,7 @@ gtk = { version = "0.10.0", package = "gtk4", features = ["v4_14"] }
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 rodio = "0.17"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "time"] }
 
 [dependencies.adw]
 package = "libadwaita"
