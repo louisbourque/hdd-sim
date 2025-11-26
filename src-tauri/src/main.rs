@@ -1,13 +1,17 @@
 mod config;
 mod monitor;
 
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-use tauri::{Manager, State};
+use tauri::WebviewUrl;
+use tauri::{
+    Manager, State,
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+};
 
 use config::{Config, DriveConfig, load_config, save_config};
 use monitor::Monitor;
@@ -129,7 +133,9 @@ fn save_config_command(
     monitor_state: State<'_, Arc<Mutex<Monitor>>>,
 ) -> Result<(), String> {
     save_config(&config);
-    let monitor = monitor_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let monitor = monitor_state
+        .lock()
+        .map_err(|e| format!("Lock error: {}", e))?;
     monitor.update_config(&config);
     Ok(())
 }
@@ -141,9 +147,13 @@ fn update_drive_config(
     monitor_state: State<'_, Arc<Mutex<Monitor>>>,
 ) -> Result<(), String> {
     let mut config = load_config();
-    config.drives.insert(device_name.clone(), drive_config.clone());
+    config
+        .drives
+        .insert(device_name.clone(), drive_config.clone());
     save_config(&config);
-    let monitor = monitor_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let monitor = monitor_state
+        .lock()
+        .map_err(|e| format!("Lock error: {}", e))?;
     monitor.update_config(&config);
     Ok(())
 }
@@ -162,7 +172,9 @@ fn update_global_config(
         config.poll_interval_ms = interval.clamp(50, 1000);
     }
     save_config(&config);
-    let monitor = monitor_state.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let monitor = monitor_state
+        .lock()
+        .map_err(|e| format!("Lock error: {}", e))?;
     monitor.update_config(&config);
     Ok(())
 }
@@ -182,10 +194,53 @@ fn main() {
             update_drive_config,
             update_global_config
         ])
-        .setup(|_app| {
+        .setup(|app| {
+            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let restore_i = MenuItem::with_id(app, "restore", "Restore", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&restore_i, &quit_i])?;
+
+            let tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .on_menu_event(|app_handle, event| match event.id.as_ref() {
+                    "quit" => {
+                        println!("quit menu item was clicked");
+                        app_handle.exit(99);
+                    }
+                    "restore" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.hide();
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        } else {
+                            tauri::WebviewWindowBuilder::new(
+                                app_handle,
+                                "main",
+                                WebviewUrl::App("index.html".into()),
+                            )
+                            .title("HDD Simulator")
+                            .build()
+                            .unwrap();
+                        }
+                    }
+                    _ => {
+                        println!("menu item {:?} not handled", event.id);
+                    }
+                })
+                .build(app)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
+                if code.is_none() || code.unwrap() != 99 {
+                    api.prevent_exit();
+                }
+                for (_label, window) in app.webview_windows() {
+                    window.close().unwrap();
+                }
+            }
+        });
 }
-
