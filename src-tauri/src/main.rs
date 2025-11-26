@@ -117,7 +117,7 @@ fn scan_hard_drives(config: &Config) -> Vec<Drive> {
 }
 
 #[tauri::command]
-fn get_drives(monitor_state: State<'_, Arc<Mutex<Monitor>>>) -> Result<Vec<Drive>, String> {
+fn get_drives() -> Result<Vec<Drive>, String> {
     let config = load_config();
     Ok(scan_hard_drives(&config))
 }
@@ -199,7 +199,7 @@ fn main() {
             let restore_i = MenuItem::with_id(app, "restore", "Restore", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&restore_i, &quit_i])?;
 
-            let tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .on_menu_event(|app_handle, event| match event.id.as_ref() {
