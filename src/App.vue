@@ -44,9 +44,8 @@ async function loadData(): Promise<void> {
   }
 }
 
-function handleDriveSelect(index: number): void {
-  selectedDriveIndex.value =
-    index === selectedDriveIndex.value ? undefined : index
+function handleDriveSelect(index: number | undefined): void {
+  selectedDriveIndex.value = index
 }
 
 function handleDriveUpdate(updatedDrive: Drive): void {

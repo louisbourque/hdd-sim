@@ -1,6 +1,6 @@
 <template>
-  <div class="sidebar">
-    <ul class="drive-list">
+  <div class="sidebar" @click="$emit('select', undefined)">
+    <ul class="drive-list" @click.stop>
       <li
         v-for="(drive, index) in drives"
         :key="drive.name"
@@ -26,6 +26,6 @@ defineProps<{
 }>()
 
 defineEmits<{
-  select: [index: number]
+  select: [index: number | undefined]
 }>()
 </script>
