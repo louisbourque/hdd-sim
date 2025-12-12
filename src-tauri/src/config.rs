@@ -19,7 +19,7 @@ impl Default for DriveConfig {
             enabled: false,
             read: false,
             write: false,
-            volume: 50,
+            volume: 35,
         }
     }
 }
