@@ -58,31 +58,31 @@
   </div>
 </template>
 
-<script setup>
-import { updateDriveConfig } from '../lib/tauri'
+<script setup lang="ts">
+import type { Drive, DriveConfig } from "../lib/tauri"
+import { updateDriveConfig } from "../lib/tauri"
 
-const props = defineProps({
-  drive: {
-    type: Object,
-    required: true,
-  },
-})
+const props = defineProps<{
+  drive: Drive
+}>()
 
-const emit = defineEmits(['update'])
+const emit = defineEmits<{
+  update: [drive: Drive]
+}>()
 
-async function saveDriveConfig(newConfig) {
+async function saveDriveConfig(newConfig: DriveConfig): Promise<void> {
   try {
     await updateDriveConfig(props.drive.name, newConfig)
-    emit('update', {
+    emit("update", {
       ...props.drive,
       config: newConfig,
     })
   } catch (error) {
-    console.error('Failed to update drive config:', error)
+    console.error("Failed to update drive config:", error)
   }
 }
 
-function toggleEnabled() {
+function toggleEnabled(): void {
   const newConfig = {
     ...props.drive.config,
     enabled: !props.drive.config.enabled,
@@ -90,7 +90,7 @@ function toggleEnabled() {
   saveDriveConfig(newConfig)
 }
 
-function toggleRead() {
+function toggleRead(): void {
   if (props.drive.config.enabled) {
     const newConfig = {
       ...props.drive.config,
@@ -100,7 +100,7 @@ function toggleRead() {
   }
 }
 
-function toggleWrite() {
+function toggleWrite(): void {
   if (props.drive.config.enabled) {
     const newConfig = {
       ...props.drive.config,
@@ -110,14 +110,14 @@ function toggleWrite() {
   }
 }
 
-function updateVolume(event) {
+function updateVolume(event: Event): void {
   if (props.drive.config.enabled) {
+    const target = event.target as HTMLInputElement
     const newConfig = {
       ...props.drive.config,
-      volume: parseInt(event.target.value),
+      volume: parseInt(target.value),
     }
     saveDriveConfig(newConfig)
   }
 }
 </script>
-

@@ -17,18 +17,15 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  drives: {
-    type: Array,
-    required: true,
-  },
-  selectedIndex: {
-    type: Number,
-    default: null,
-  },
-})
+<script setup lang="ts">
+import type { Drive } from "../lib/tauri"
 
-defineEmits(['select'])
+defineProps<{
+  drives: Drive[]
+  selectedIndex: number | undefined
+}>()
+
+defineEmits<{
+  select: [index: number]
+}>()
 </script>
-

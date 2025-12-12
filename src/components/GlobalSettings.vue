@@ -26,35 +26,36 @@
   </div>
 </template>
 
-<script setup>
-import { updateGlobalConfig } from "../lib/tauri";
+<script setup lang="ts">
+import type { Config } from "../lib/tauri"
+import { updateGlobalConfig } from "../lib/tauri"
 
-const props = defineProps({
-  config: {
-    type: Object,
-    required: true,
-  },
-});
+const props = defineProps<{
+  config: Config
+}>()
 
-const emit = defineEmits(["update"]);
+const emit = defineEmits<{
+  update: [config: Partial<Config>]
+}>()
 
-async function toggleActive() {
+async function toggleActive(): Promise<void> {
   try {
-    const newActive = !props.config.active;
-    await updateGlobalConfig(newActive, undefined);
-    emit("update", { active: newActive });
+    const newActive = !props.config.active
+    await updateGlobalConfig(newActive, undefined)
+    emit("update", { active: newActive })
   } catch (error) {
-    console.error("Failed to update active state:", error);
+    console.error("Failed to update active state:", error)
   }
 }
 
-async function updateInterval(event) {
+async function updateInterval(event: Event): Promise<void> {
   try {
-    const newInterval = parseInt(event.target.value);
-    await updateGlobalConfig(undefined, newInterval);
-    emit("update", { poll_interval_ms: newInterval });
+    const target = event.target as HTMLInputElement
+    const newInterval = parseInt(target.value)
+    await updateGlobalConfig(undefined, newInterval)
+    emit("update", { poll_interval_ms: newInterval })
   } catch (error) {
-    console.error("Failed to update interval:", error);
+    console.error("Failed to update interval:", error)
   }
 }
 </script>
