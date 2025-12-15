@@ -21,24 +21,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { getDrives, loadConfig, type Drive, type Config } from "./lib/tauri"
+import type { Drive, Config } from "./lib/tauri"
 import DriveList from "./components/DriveList.vue"
 import DriveSettings from "./components/DriveSettings.vue"
 import GlobalSettings from "./components/GlobalSettings.vue"
 import EmptyState from "./components/EmptyState.vue"
+import { useDrives } from "./composables/useDrives"
+import { useConfig } from "./composables/useConfig"
 
-const drives = ref<Drive[]>([])
+const { drives, loadDrives, updateDrive } = useDrives()
+const { config, loadConfig, updateConfig } = useConfig()
 const selectedDriveIndex = ref<number | undefined>(undefined)
-const config = ref<Config>({ active: true, poll_interval_ms: 100, drives: {} })
 
 async function loadData(): Promise<void> {
   try {
-    const [drivesData, configData] = await Promise.all([
-      getDrives(),
-      loadConfig(),
-    ])
-    drives.value = drivesData
-    config.value = configData
+    await Promise.all([loadDrives(), loadConfig()])
   } catch (error) {
     console.error("Failed to load data:", error)
   }
@@ -49,14 +46,11 @@ function handleDriveSelect(index: number | undefined): void {
 }
 
 function handleDriveUpdate(updatedDrive: Drive): void {
-  const index = drives.value.findIndex((d) => d.name === updatedDrive.name)
-  if (index !== -1) {
-    drives.value[index] = updatedDrive
-  }
+  updateDrive(updatedDrive)
 }
 
 function handleGlobalUpdate(updatedConfig: Partial<Config>): void {
-  config.value = { ...config.value, ...updatedConfig }
+  updateConfig(updatedConfig)
 }
 
 onMounted(() => {

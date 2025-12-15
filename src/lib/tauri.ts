@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { createTauriService } from "./tauriService";
 
 export interface DriveConfig {
   enabled: boolean;
@@ -20,34 +20,30 @@ export interface Config {
   poll_interval_ms: number;
 }
 
+const service = createTauriService();
+
 export async function getDrives(): Promise<Drive[]> {
-  return await invoke("get_drives");
+  return await service.getDrives();
 }
 
 export async function loadConfig(): Promise<Config> {
-  return await invoke("load_config_command");
+  return await service.loadConfig();
 }
 
 export async function saveConfig(config: Config): Promise<void> {
-  return await invoke("save_config_command", { config });
+  return await service.saveConfig(config);
 }
 
 export async function updateDriveConfig(
   deviceName: string,
   driveConfig: DriveConfig
 ): Promise<void> {
-  return await invoke("update_drive_config", {
-    deviceName,
-    driveConfig,
-  });
+  return await service.updateDriveConfig(deviceName, driveConfig);
 }
 
 export async function updateGlobalConfig(
   active?: boolean,
   pollIntervalMs?: number
 ): Promise<void> {
-  return await invoke("update_global_config", {
-    active,
-    pollIntervalMs,
-  });
+  return await service.updateGlobalConfig(active, pollIntervalMs);
 }
