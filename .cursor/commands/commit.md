@@ -21,6 +21,8 @@ Before committing, verify:
 - Confirm tests pass (if applicable): `cargo test`
 - No unrelated files are included
 - No sensitive data or .env files are staged
+- Confirm frontend tests pass (if applicable): `npm run test:run`
+- If any tests fail, report the failure and recomment next steps
 
 ### 3. Determine Commit Type and Scope
 
