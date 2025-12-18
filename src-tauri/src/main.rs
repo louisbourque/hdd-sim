@@ -52,21 +52,34 @@ fn get_drive_model(device_path: &Path) -> Option<String> {
     None
 }
 
+fn format_drive_size(sectors: u64) -> String {
+    // Convert sectors (512 bytes) to bytes, then to TB
+    let bytes = sectors * 512;
+    let tb = bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
+    if tb >= 1.0 {
+        return format!("{:.1} TB", tb);
+    }
+    let gb = bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    format!("{:.1} GB", gb)
+}
+
 fn get_drive_size_display(device_name: &str) -> String {
     let size_path = Path::new("/sys/block").join(device_name).join("size");
     if let Ok(size_content) = fs::read_to_string(&size_path)
         && let Ok(sectors) = size_content.trim().parse::<u64>()
     {
-        // Convert sectors (512 bytes) to bytes, then to TB
-        let bytes = sectors * 512;
-        let tb = bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
-        if tb >= 1.0 {
-            return format!("{:.1} TB", tb);
-        }
-        let gb = bytes as f64 / (1024.0 * 1024.0 * 1024.0);
-        return format!("{:.1} GB", gb);
+        return format_drive_size(sectors);
     }
     "Unknown".to_string()
+}
+
+fn is_virtual_device(device_name: &str) -> bool {
+    device_name.starts_with("loop")
+        || device_name.starts_with("ram")
+        || device_name.starts_with("zram")
+        || device_name.starts_with("dm-")
+        || device_name.starts_with("sr")
+        || device_name.starts_with("fd")
 }
 
 fn scan_hard_drives(config: &Config) -> Vec<Drive> {
@@ -79,13 +92,7 @@ fn scan_hard_drives(config: &Config) -> Vec<Drive> {
             let device_str = device_name.to_string_lossy().to_string();
 
             // Filter out virtual devices (loop, ram, zram, etc.)
-            if device_str.starts_with("loop")
-                || device_str.starts_with("ram")
-                || device_str.starts_with("zram")
-                || device_str.starts_with("dm-")
-                || device_str.starts_with("sr")
-                || device_str.starts_with("fd")
-            {
+            if is_virtual_device(&device_str) {
                 continue;
             }
 
@@ -243,4 +250,106 @@ fn main() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_drive_size_tb() {
+        // 1 TB = 1024^4 bytes = 1099511627776 bytes = 2147483648 sectors (512 bytes each)
+        let sectors_1tb = 1_099_511_627_776 / 512;
+        let result = format_drive_size(sectors_1tb);
+        assert!(result.contains("TB"));
+        // Result should be close to 1.0 TB (allow for formatting precision)
+        let value: f64 = result.split_whitespace().next().unwrap().parse().unwrap();
+        assert!(
+            (0.9..=1.1).contains(&value),
+            "Expected ~1.0 TB, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_format_drive_size_gb() {
+        // 500 GB = 500 * 1024^3 bytes = 536870912000 bytes = 1048576000 sectors
+        let sectors_500gb = 536_870_912_000 / 512;
+        let result = format_drive_size(sectors_500gb);
+        assert!(result.contains("GB"));
+        assert!(result.starts_with("500.0") || result.starts_with("500.1")); // Allow small rounding
+    }
+
+    #[test]
+    fn test_format_drive_size_small() {
+        // 10 GB
+        let sectors_10gb = 10 * 1024 * 1024 * 1024 / 512;
+        let result = format_drive_size(sectors_10gb);
+        assert!(result.contains("GB"));
+        assert!(result.starts_with("10.0"));
+    }
+
+    #[test]
+    fn test_format_drive_size_large() {
+        // 2 TB
+        let sectors_2tb = 2 * 1024 * 1024 * 1024 * 1024 / 512;
+        let result = format_drive_size(sectors_2tb);
+        assert!(result.contains("TB"));
+        assert!(result.starts_with("2.0"));
+    }
+
+    #[test]
+    fn test_format_drive_size_zero() {
+        let result = format_drive_size(0);
+        assert!(result.contains("GB")); // Should format as GB even if 0
+    }
+
+    #[test]
+    fn test_is_virtual_device_loop() {
+        assert!(is_virtual_device("loop0"));
+        assert!(is_virtual_device("loop1"));
+        assert!(!is_virtual_device("sda"));
+    }
+
+    #[test]
+    fn test_is_virtual_device_ram() {
+        assert!(is_virtual_device("ram0"));
+        assert!(is_virtual_device("ram1"));
+        assert!(!is_virtual_device("sda"));
+    }
+
+    #[test]
+    fn test_is_virtual_device_zram() {
+        assert!(is_virtual_device("zram0"));
+        assert!(!is_virtual_device("sda"));
+    }
+
+    #[test]
+    fn test_is_virtual_device_dm() {
+        assert!(is_virtual_device("dm-0"));
+        assert!(is_virtual_device("dm-1"));
+        assert!(!is_virtual_device("sda"));
+    }
+
+    #[test]
+    fn test_is_virtual_device_sr() {
+        assert!(is_virtual_device("sr0"));
+        assert!(is_virtual_device("sr1"));
+        assert!(!is_virtual_device("sda"));
+    }
+
+    #[test]
+    fn test_is_virtual_device_fd() {
+        assert!(is_virtual_device("fd0"));
+        assert!(!is_virtual_device("sda"));
+    }
+
+    #[test]
+    fn test_is_virtual_device_real_drives() {
+        assert!(!is_virtual_device("sda"));
+        assert!(!is_virtual_device("sdb"));
+        assert!(!is_virtual_device("nvme0n1"));
+        assert!(!is_virtual_device("nvme1n1p1"));
+        assert!(!is_virtual_device("hda"));
+    }
 }
