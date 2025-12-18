@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { mount } from "@vue/test-utils";
-import DriveList from "../DriveList.vue";
-import type { Drive } from "../../lib/tauri";
+import { describe, it, expect, vi } from "vitest"
+import { mount } from "@vue/test-utils"
+import DriveList from "../DriveList.vue"
+import type { Drive } from "../../lib/tauri"
 
 describe("DriveList", () => {
   const mockDrives: Drive[] = [
@@ -27,7 +27,7 @@ describe("DriveList", () => {
         volume: 75,
       },
     },
-  ];
+  ]
 
   it("renders list of drives with correct display names", () => {
     const wrapper = mount(DriveList, {
@@ -35,13 +35,13 @@ describe("DriveList", () => {
         drives: mockDrives,
         selectedIndex: undefined,
       },
-    });
+    })
 
-    expect(wrapper.text()).toContain("1.0 TB Disk");
-    expect(wrapper.text()).toContain("Test Drive 1");
-    expect(wrapper.text()).toContain("500.0 GB Disk");
-    expect(wrapper.text()).toContain("Test Drive 2");
-  });
+    expect(wrapper.text()).toContain("1.0 TB Disk")
+    expect(wrapper.text()).toContain("Test Drive 1")
+    expect(wrapper.text()).toContain("500.0 GB Disk")
+    expect(wrapper.text()).toContain("Test Drive 2")
+  })
 
   it("highlights selected drive", () => {
     const wrapper = mount(DriveList, {
@@ -49,12 +49,12 @@ describe("DriveList", () => {
         drives: mockDrives,
         selectedIndex: 1,
       },
-    });
+    })
 
-    const driveItems = wrapper.findAll(".drive-item");
-    expect(driveItems[0].classes()).not.toContain("selected");
-    expect(driveItems[1].classes()).toContain("selected");
-  });
+    const driveItems = wrapper.findAll(".drive-item")
+    expect(driveItems[0].classes()).not.toContain("selected")
+    expect(driveItems[1].classes()).toContain("selected")
+  })
 
   it("emits select event when drive clicked", async () => {
     const wrapper = mount(DriveList, {
@@ -62,14 +62,14 @@ describe("DriveList", () => {
         drives: mockDrives,
         selectedIndex: undefined,
       },
-    });
+    })
 
-    const driveItems = wrapper.findAll(".drive-item");
-    await driveItems[0].trigger("click");
+    const driveItems = wrapper.findAll(".drive-item")
+    await driveItems[0].trigger("click")
 
-    expect(wrapper.emitted("select")).toBeTruthy();
-    expect(wrapper.emitted("select")?.[0]).toEqual([0]);
-  });
+    expect(wrapper.emitted("select")).toBeTruthy()
+    expect(wrapper.emitted("select")?.[0]).toEqual([0])
+  })
 
   it("shows empty state when no drives", () => {
     const wrapper = mount(DriveList, {
@@ -77,11 +77,11 @@ describe("DriveList", () => {
         drives: [],
         selectedIndex: undefined,
       },
-    });
+    })
 
-    expect(wrapper.text()).toContain("No hard drives found");
-    expect(wrapper.find(".drive-item").exists()).toBe(true);
-  });
+    expect(wrapper.text()).toContain("No hard drives found")
+    expect(wrapper.find(".drive-item").exists()).toBe(true)
+  })
 
   it("handles click outside to deselect", async () => {
     const wrapper = mount(DriveList, {
@@ -89,14 +89,14 @@ describe("DriveList", () => {
         drives: mockDrives,
         selectedIndex: 0,
       },
-    });
+    })
 
-    const sidebar = wrapper.find(".sidebar");
-    await sidebar.trigger("click");
+    const sidebar = wrapper.find(".sidebar")
+    await sidebar.trigger("click")
 
-    expect(wrapper.emitted("select")).toBeTruthy();
-    expect(wrapper.emitted("select")?.[0]).toEqual([undefined]);
-  });
+    expect(wrapper.emitted("select")).toBeTruthy()
+    expect(wrapper.emitted("select")?.[0]).toEqual([undefined])
+  })
 
   it("prevents deselection when clicking on drive list", async () => {
     const wrapper = mount(DriveList, {
@@ -104,12 +104,11 @@ describe("DriveList", () => {
         drives: mockDrives,
         selectedIndex: 0,
       },
-    });
+    })
 
-    const driveList = wrapper.find(".drive-list");
-    await driveList.trigger("click.stop");
+    const driveList = wrapper.find(".drive-list")
+    await driveList.trigger("click.stop")
 
-    expect(wrapper.emitted("select")).toBeFalsy();
-  });
-});
-
+    expect(wrapper.emitted("select")).toBeFalsy()
+  })
+})
