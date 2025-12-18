@@ -1,7 +1,6 @@
 <template>
+  <h2 class="settings-title">{{ drive.model }} Settings</h2>
   <div class="settings-section">
-    <h2 class="settings-title">{{ drive.model }} Settings</h2>
-
     <div class="setting-row">
       <span class="setting-label">Enabled</span>
       <div class="setting-control">
