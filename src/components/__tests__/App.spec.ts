@@ -32,10 +32,24 @@ describe("App", () => {
     active: true,
     poll_interval_ms: 100,
     drives: {},
+    theme: "system",
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation((query) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
   })
 
   it("loads drives and config on mount", async () => {

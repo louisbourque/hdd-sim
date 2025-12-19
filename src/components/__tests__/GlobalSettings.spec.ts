@@ -13,6 +13,7 @@ describe("GlobalSettings", () => {
     active: true,
     poll_interval_ms: 100,
     drives: {},
+    theme: "system",
   }
 
   beforeEach(() => {
@@ -62,7 +63,7 @@ describe("GlobalSettings", () => {
     const button = wrapper.find(".play-pause-button")
     await button.trigger("click")
 
-    expect(updateGlobalConfigSpy).toHaveBeenCalledWith(false, undefined)
+    expect(updateGlobalConfigSpy).toHaveBeenCalledWith(false, undefined, undefined)
     expect(wrapper.emitted("update")).toBeTruthy()
     expect(wrapper.emitted("update")?.[0]).toEqual([{ active: false }])
   })
@@ -81,7 +82,7 @@ describe("GlobalSettings", () => {
     await slider.setValue(200)
     await slider.trigger("input")
 
-    expect(updateGlobalConfigSpy).toHaveBeenCalledWith(undefined, 200)
+    expect(updateGlobalConfigSpy).toHaveBeenCalledWith(undefined, 200, undefined)
     expect(wrapper.emitted("update")).toBeTruthy()
     expect(wrapper.emitted("update")?.[0]).toEqual([{ poll_interval_ms: 200 }])
   })

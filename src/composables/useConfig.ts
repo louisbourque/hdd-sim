@@ -7,6 +7,7 @@ const defaultConfig: Config = {
   active: true,
   poll_interval_ms: 100,
   drives: {},
+  theme: "system",
 };
 
 export function useConfig(service?: TauriService) {

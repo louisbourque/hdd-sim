@@ -169,6 +169,7 @@ fn update_drive_config(
 fn update_global_config(
     active: Option<bool>,
     poll_interval_ms: Option<u64>,
+    theme: Option<String>,
     monitor_state: State<'_, Arc<Mutex<Monitor>>>,
 ) -> Result<(), String> {
     let mut config = load_config();
@@ -177,6 +178,11 @@ fn update_global_config(
     }
     if let Some(interval) = poll_interval_ms {
         config.poll_interval_ms = interval.clamp(50, 1000);
+    }
+    if let Some(t) = theme
+        && (t == "light" || t == "dark" || t == "system")
+    {
+        config.theme = t;
     }
     save_config(&config);
     let monitor = monitor_state

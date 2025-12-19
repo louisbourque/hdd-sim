@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { ref, onMounted, watch } from "vue"
 import type { Drive, Config } from "./lib/tauri"
 import DriveList from "./components/DriveList.vue"
 import DriveSettings from "./components/DriveSettings.vue"
@@ -32,6 +32,32 @@ import { useConfig } from "./composables/useConfig"
 const { drives, loadDrives, updateDrive } = useDrives()
 const { config, loadConfig, updateConfig } = useConfig()
 const selectedDriveIndex = ref<number | undefined>(undefined)
+
+function applyTheme(theme: string): void {
+  const root = document.documentElement
+  const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+  
+  if (theme === "dark" || (theme === "system" && isSystemDark)) {
+    root.classList.add("dark")
+  } else {
+    root.classList.remove("dark")
+  }
+}
+
+watch(
+  () => config.value?.theme || "system",
+  (theme) => {
+    applyTheme(theme)
+  },
+  { immediate: true }
+)
+
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  const theme = config.value?.theme || "system"
+  if (theme === "system") {
+    applyTheme(theme)
+  }
+})
 
 async function loadData(): Promise<void> {
   try {

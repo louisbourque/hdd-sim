@@ -79,6 +79,7 @@ volume = 50
         let config = Config {
             active: false,
             poll_interval_ms: 250,
+            theme: "system".to_string(),
             drives: {
                 let mut drives = HashMap::new();
                 drives.insert(
@@ -113,6 +114,7 @@ volume = 50
         let original = Config {
             active: false,
             poll_interval_ms: 500,
+            theme: "system".to_string(),
             drives: {
                 let mut drives = HashMap::new();
                 drives.insert(
@@ -179,6 +181,7 @@ pub struct Config {
     pub drives: HashMap<String, DriveConfig>,
     pub active: bool,
     pub poll_interval_ms: u64,
+    pub theme: String,
 }
 
 impl Default for Config {
@@ -187,6 +190,7 @@ impl Default for Config {
             drives: HashMap::new(),
             active: true,
             poll_interval_ms: 100,
+            theme: "system".to_string(),
         }
     }
 }

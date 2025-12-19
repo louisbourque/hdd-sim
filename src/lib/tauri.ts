@@ -18,6 +18,7 @@ export interface Config {
   drives: Record<string, DriveConfig>;
   active: boolean;
   poll_interval_ms: number;
+  theme: string;
 }
 
 const service = createTauriService();
@@ -43,7 +44,8 @@ export async function updateDriveConfig(
 
 export async function updateGlobalConfig(
   active?: boolean,
-  pollIntervalMs?: number
+  pollIntervalMs?: number,
+  theme?: string
 ): Promise<void> {
-  return await service.updateGlobalConfig(active, pollIntervalMs);
+  return await service.updateGlobalConfig(active, pollIntervalMs, theme);
 }

@@ -6,7 +6,7 @@ export interface TauriService {
   loadConfig(): Promise<Config>
   saveConfig(config: Config): Promise<void>
   updateDriveConfig(deviceName: string, driveConfig: DriveConfig): Promise<void>
-  updateGlobalConfig(active?: boolean, pollIntervalMs?: number): Promise<void>
+  updateGlobalConfig(active?: boolean, pollIntervalMs?: number, theme?: string): Promise<void>
 }
 
 class DefaultTauriService implements TauriService {
@@ -34,11 +34,13 @@ class DefaultTauriService implements TauriService {
 
   async updateGlobalConfig(
     active?: boolean,
-    pollIntervalMs?: number
+    pollIntervalMs?: number,
+    theme?: string
   ): Promise<void> {
     return await invoke("update_global_config", {
       active,
       pollIntervalMs,
+      theme,
     })
   }
 }

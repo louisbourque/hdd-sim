@@ -368,6 +368,7 @@ mod tests {
         let config = Config {
             active: false,
             poll_interval_ms: 250,
+            theme: "system".to_string(),
             drives: {
                 let mut drives = HashMap::new();
                 drives.insert(

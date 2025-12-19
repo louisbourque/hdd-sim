@@ -48,6 +48,7 @@ describe("tauriService", () => {
         active: true,
         poll_interval_ms: 100,
         drives: {},
+        theme: "system",
       };
 
       vi.mocked(invoke).mockResolvedValue(mockConfig);
@@ -64,6 +65,7 @@ describe("tauriService", () => {
         active: true,
         poll_interval_ms: 100,
         drives: {},
+        theme: "system",
       };
 
       vi.mocked(invoke).mockResolvedValue(undefined);
@@ -104,6 +106,7 @@ describe("tauriService", () => {
       expect(invoke).toHaveBeenCalledWith("update_global_config", {
         active: true,
         pollIntervalMs: undefined,
+        theme: undefined,
       });
     });
 
@@ -116,6 +119,7 @@ describe("tauriService", () => {
       expect(invoke).toHaveBeenCalledWith("update_global_config", {
         active: undefined,
         pollIntervalMs: 200,
+        theme: undefined,
       });
     });
 
@@ -128,6 +132,7 @@ describe("tauriService", () => {
       expect(invoke).toHaveBeenCalledWith("update_global_config", {
         active: false,
         pollIntervalMs: 300,
+        theme: undefined,
       });
     });
 

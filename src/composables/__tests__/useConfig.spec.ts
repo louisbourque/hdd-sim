@@ -23,6 +23,7 @@ describe("useConfig", () => {
       active: true,
       poll_interval_ms: 100,
       drives: {},
+      theme: "system",
     });
     expect(loading.value).toBe(false);
     expect(error.value).toBeNull();
@@ -40,6 +41,7 @@ describe("useConfig", () => {
           volume: 75,
         },
       },
+      theme: "system",
     };
 
     vi.mocked(mockService.loadConfig).mockResolvedValue(mockConfig);
@@ -71,6 +73,7 @@ describe("useConfig", () => {
       active: true,
       poll_interval_ms: 100,
       drives: {},
+      theme: "system",
     });
     await loadPromise;
 
@@ -98,6 +101,7 @@ describe("useConfig", () => {
           volume: 50,
         },
       },
+      theme: "system",
     };
 
     const { config, updateConfig } = useConfig(mockService);
@@ -125,6 +129,7 @@ describe("useConfig", () => {
       active: true,
       poll_interval_ms: 100,
       drives: {},
+      theme: "system",
     });
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "Failed to load config:",
@@ -148,6 +153,7 @@ describe("useConfig", () => {
       active: true,
       poll_interval_ms: 100,
       drives: {},
+      theme: "system",
     });
 
     consoleErrorSpy.mockRestore();
