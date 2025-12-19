@@ -47,7 +47,7 @@ describe("GlobalSettings", () => {
 
     const button = wrapper.find("button")
     expect(button.text()).toBe("▶")
-    expect(button.attributes("title")).toContain("Play")
+    expect(button.attributes("aria-label")).toContain("Start monitoring")
   })
 
   it("toggles active state and emits update", async () => {
