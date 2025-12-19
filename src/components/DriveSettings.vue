@@ -1,9 +1,18 @@
 <template>
-  <h2 class="settings-title">{{ drive.model }} Settings</h2>
-  <div class="settings-section">
-    <div class="setting-row">
-      <span class="setting-label">Enabled</span>
-      <div class="setting-control">
+  <h2 class="text-2xl font-semibold mb-8 text-gray-900 dark:text-gray-100">
+    {{ drive.model }} Settings
+  </h2>
+  <div
+    class="max-w-[600px] rounded-lg bg-gray-50 dark:bg-[#3a3a3a] transition-all duration-200 ease-out shadow-sm dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
+  >
+    <div
+      class="flex items-center justify-between p-4 mb-2 max-w-[560px] last:mb-0"
+    >
+      <span
+        class="text-sm font-medium text-gray-900 dark:text-gray-100 min-w-[80px]"
+        >Enabled</span
+      >
+      <div class="flex items-center gap-3">
         <div
           :class="['toggle-switch', { active: drive.config.enabled }]"
           @click="toggleEnabled"
@@ -11,9 +20,14 @@
       </div>
     </div>
 
-    <div class="setting-row">
-      <span class="setting-label">Read</span>
-      <div class="setting-control">
+    <div
+      class="flex items-center justify-between p-4 mb-2 max-w-[560px] last:mb-0"
+    >
+      <span
+        class="text-sm font-medium text-gray-900 dark:text-gray-100 min-w-[80px]"
+        >Read</span
+      >
+      <div class="flex items-center gap-3">
         <div
           :class="[
             'toggle-switch',
@@ -25,9 +39,14 @@
       </div>
     </div>
 
-    <div class="setting-row">
-      <span class="setting-label">Write</span>
-      <div class="setting-control">
+    <div
+      class="flex items-center justify-between p-4 mb-2 max-w-[560px] last:mb-0"
+    >
+      <span
+        class="text-sm font-medium text-gray-900 dark:text-gray-100 min-w-[80px]"
+        >Write</span
+      >
+      <div class="flex items-center gap-3">
         <div
           :class="[
             'toggle-switch',
@@ -39,9 +58,14 @@
       </div>
     </div>
 
-    <div class="setting-row">
-      <span class="setting-label">Volume</span>
-      <div class="setting-control slider-container">
+    <div
+      class="flex items-center justify-between p-4 mb-2 max-w-[560px] last:mb-0"
+    >
+      <span
+        class="text-sm font-medium text-gray-900 dark:text-gray-100 min-w-[80px]"
+        >Volume</span
+      >
+      <div class="flex items-center gap-3 flex-1 max-w-[300px]">
         <input
           type="range"
           min="0"
@@ -51,7 +75,10 @@
           class="slider"
           @input="updateVolume"
         />
-        <span class="slider-value">{{ drive.config.volume }}</span>
+        <span
+          class="min-w-[50px] text-right text-sm font-medium text-gray-600 dark:text-gray-400"
+          >{{ drive.config.volume }}</span
+        >
       </div>
     </div>
   </div>

@@ -51,9 +51,9 @@ describe("DriveList", () => {
       },
     })
 
-    const driveItems = wrapper.findAll(".drive-item")
-    expect(driveItems[0].classes()).not.toContain("selected")
-    expect(driveItems[1].classes()).toContain("selected")
+    const driveItems = wrapper.findAll("li")
+    expect(driveItems[0].classes()).not.toContain("border-blue-500")
+    expect(driveItems[1].classes()).toContain("border-blue-500")
   })
 
   it("emits select event when drive clicked", async () => {
@@ -64,7 +64,7 @@ describe("DriveList", () => {
       },
     })
 
-    const driveItems = wrapper.findAll(".drive-item")
+    const driveItems = wrapper.findAll("li")
     await driveItems[0].trigger("click")
 
     expect(wrapper.emitted("select")).toBeTruthy()
@@ -80,7 +80,6 @@ describe("DriveList", () => {
     })
 
     expect(wrapper.text()).toContain("No hard drives found")
-    expect(wrapper.find(".drive-item").exists()).toBe(true)
   })
 
   it("handles click outside to deselect", async () => {
@@ -91,7 +90,7 @@ describe("DriveList", () => {
       },
     })
 
-    const sidebar = wrapper.find(".sidebar")
+    const sidebar = wrapper.find("[data-testid='drive-list']")
     await sidebar.trigger("click")
 
     expect(wrapper.emitted("select")).toBeTruthy()
@@ -106,7 +105,7 @@ describe("DriveList", () => {
       },
     })
 
-    const driveList = wrapper.find(".drive-list")
+    const driveList = wrapper.find("ul")
     await driveList.trigger("click.stop")
 
     expect(wrapper.emitted("select")).toBeFalsy()

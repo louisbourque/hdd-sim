@@ -32,7 +32,7 @@ describe("DriveSettings", () => {
       },
     })
 
-    expect(wrapper.find(".settings-title").text()).toBe("Test Drive Settings")
+    expect(wrapper.find("h2").text()).toBe("Test Drive Settings")
   })
 
   it("toggles enabled state and emits update", async () => {

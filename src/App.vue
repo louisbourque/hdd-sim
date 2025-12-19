@@ -1,12 +1,14 @@
 <template>
-  <div class="main-container">
+  <div class="flex flex-1 overflow-hidden p-4 gap-4">
     <DriveList
       :drives="drives"
       :selected-index="selectedDriveIndex"
       @select="handleDriveSelect"
     />
-    <div class="content-area">
-      <div class="settings-pane">
+    <div class="flex flex-1 flex-col overflow-hidden gap-4">
+      <div
+        class="flex-1 overflow-y-auto p-8 bg-white dark:bg-[#2d2d2d] rounded-xl shadow-md dark:shadow-[0_2px_8px_rgba(0,0,0,0.3),0_1px_2px_rgba(0,0,0,0.2)]"
+      >
         <EmptyState v-if="selectedDriveIndex === undefined" />
         <DriveSettings
           v-else
@@ -36,7 +38,7 @@ const selectedDriveIndex = ref<number | undefined>(undefined)
 function applyTheme(theme: string): void {
   const root = document.documentElement
   const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-  
+
   if (theme === "dark" || (theme === "system" && isSystemDark)) {
     root.classList.add("dark")
   } else {
@@ -52,12 +54,14 @@ watch(
   { immediate: true }
 )
 
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  const theme = config.value?.theme || "system"
-  if (theme === "system") {
-    applyTheme(theme)
-  }
-})
+window
+  .matchMedia("(prefers-color-scheme: dark)")
+  .addEventListener("change", () => {
+    const theme = config.value?.theme || "system"
+    if (theme === "system") {
+      applyTheme(theme)
+    }
+  })
 
 async function loadData(): Promise<void> {
   try {

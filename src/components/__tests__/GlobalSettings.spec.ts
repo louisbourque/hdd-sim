@@ -27,7 +27,7 @@ describe("GlobalSettings", () => {
       },
     })
 
-    const button = wrapper.find(".play-pause-button")
+    const button = wrapper.find("button")
     expect(button.exists()).toBe(true)
     expect(button.text()).toBe("⏸")
     expect(button.classes()).not.toContain("paused")
@@ -45,9 +45,9 @@ describe("GlobalSettings", () => {
       },
     })
 
-    const button = wrapper.find(".play-pause-button")
+    const button = wrapper.find("button")
     expect(button.text()).toBe("▶")
-    expect(button.classes()).toContain("paused")
+    expect(button.attributes("title")).toContain("Play")
   })
 
   it("toggles active state and emits update", async () => {
@@ -60,10 +60,14 @@ describe("GlobalSettings", () => {
       },
     })
 
-    const button = wrapper.find(".play-pause-button")
+    const button = wrapper.find("button")
     await button.trigger("click")
 
-    expect(updateGlobalConfigSpy).toHaveBeenCalledWith(false, undefined, undefined)
+    expect(updateGlobalConfigSpy).toHaveBeenCalledWith(
+      false,
+      undefined,
+      undefined
+    )
     expect(wrapper.emitted("update")).toBeTruthy()
     expect(wrapper.emitted("update")?.[0]).toEqual([{ active: false }])
   })
@@ -82,7 +86,11 @@ describe("GlobalSettings", () => {
     await slider.setValue(200)
     await slider.trigger("input")
 
-    expect(updateGlobalConfigSpy).toHaveBeenCalledWith(undefined, 200, undefined)
+    expect(updateGlobalConfigSpy).toHaveBeenCalledWith(
+      undefined,
+      200,
+      undefined
+    )
     expect(wrapper.emitted("update")).toBeTruthy()
     expect(wrapper.emitted("update")?.[0]).toEqual([{ poll_interval_ms: 200 }])
   })
@@ -117,7 +125,7 @@ describe("GlobalSettings", () => {
       },
     })
 
-    const button = wrapper.find(".play-pause-button")
+    const button = wrapper.find("button")
     await button.trigger("click")
 
     expect(updateGlobalConfigSpy).toHaveBeenCalled()

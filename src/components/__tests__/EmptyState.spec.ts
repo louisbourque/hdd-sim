@@ -13,15 +13,6 @@ describe("EmptyState", () => {
   it("renders empty state icon", () => {
     const wrapper = mount(EmptyState)
 
-    expect(wrapper.find(".empty-state-icon").exists()).toBe(true)
-    expect(wrapper.find(".empty-state-icon").text()).toBe("💾")
-  })
-
-  it("has correct CSS classes", () => {
-    const wrapper = mount(EmptyState)
-
-    expect(wrapper.find(".empty-state").exists()).toBe(true)
-    expect(wrapper.find(".empty-state-title").exists()).toBe(true)
-    expect(wrapper.find(".empty-state-subtitle").exists()).toBe(true)
+    expect(wrapper.text()).toContain("💾")
   })
 })
