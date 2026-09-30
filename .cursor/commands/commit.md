@@ -16,7 +16,7 @@ When this command is invoked, follow these steps:
 
 Before committing, verify:
 
-- Run `cargo check` to ensure TypeScript compiles
+- Run `cargo check` to ensure Rust compiles
 - Run `cargo fmt` to check code style
 - Confirm tests pass (if applicable): `cargo test`
 - No unrelated files are included
