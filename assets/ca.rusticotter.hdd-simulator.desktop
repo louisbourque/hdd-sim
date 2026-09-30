@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=HDD Simulator
+Comment=Hear your drives click like an old hard disk
+Exec=hdd-simulator
+Icon=ca.rusticotter.hdd-simulator
+Categories=Utility;

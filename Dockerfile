@@ -1,18 +1,12 @@
-FROM ubuntu:mantic
-ARG RUST_VERSION=1.75.0
-ENV RUST_VERSION=$RUST_VERSION
+FROM ubuntu:24.04
 
-RUN apt update
-RUN apt install build-essential curl libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev -y
-
-# Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-RUN apt install -y nodejs
+RUN apt update && apt install -y build-essential curl pkg-config \
+    libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev \
+    libfontconfig-dev libfreetype-dev libxcb1-dev libasound2-dev libdbus-1-dev
 
 # Install Rust
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH=/root/.cargo/bin:$PATH
-RUN rustup install ${RUST_VERSION}
 
 WORKDIR /mnt
 
