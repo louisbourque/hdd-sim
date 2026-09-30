@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -58,37 +59,107 @@ fn parse_drive_stat(device_name: &str) -> Option<DriveStats> {
     parse_drive_stat_content(&content)
 }
 
-// Programmatically generated click sound
+// Tiny xorshift PRNG so clicks and their spacing vary without pulling in `rand`
+fn xorshift(state: &mut u32) -> f32 {
+    *state ^= *state << 13;
+    *state ^= *state >> 17;
+    *state ^= *state << 5;
+    *state as f32 / u32::MAX as f32
+}
+
+fn random_seed() -> u32 {
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    (nanos ^ COUNTER.fetch_add(0x9E37_79B9, Ordering::Relaxed)) | 1
+}
+
+// Programmatically generated HDD seek click: a sharp noise tick from the actuator,
+// a short metallic ring from arm/chassis resonances, a quieter settle tick, a low
+// thump from the arm's mass, and a bassy echo from the case. All muffled by the enclosure.
 struct ClickSound {
     sample_rate: u32,
     duration_samples: u32,
     current_sample: u32,
-    // Echo/reverb delay buffer (stores samples for delayed mixing)
-    delay_buffer: Vec<f32>,
-    delay_buffer_pos: usize,
-    // Low-pass filter state for muffling effect
-    lowpass_state: f32,
+    rng: u32,
+    // Per-click jittered resonance frequencies (Hz)
+    resonances: [f32; 3],
+    // When the head settle tick lands (seconds)
+    settle_at: f32,
+    // High-pass filter state
+    hp_prev_in: f32,
+    hp_prev_out: f32,
+    // Two cascaded low-pass stages: enclosure + case muffling
+    lp: [f32; 2],
+    // Case echo: delay line with a low-passed feedback loop, so each bounce gets bassier
+    echo_buf: Vec<f32>,
+    echo_pos: usize,
+    echo_lp: f32,
     // Volume multiplier (0.0 to 1.0)
     volume: f32,
 }
 
 impl ClickSound {
+    // Tuning knobs, tweak by ear
+    const RESONANCES_HZ: [f32; 3] = [1440.0, 2100.0, 2880.0];
+    const RESONANCE_GAIN: [f32; 3] = [0.35, 0.25, 0.15];
+    const RING_DECAY_S: [f32; 3] = [0.0012, 0.0009, 0.0007];
+    const RESONANCE_JITTER: f32 = 0.08;
+    const TICK_GAIN: f32 = 1.0;
+    const SETTLE_GAIN: f32 = 0.25;
+    const SETTLE_MIN_S: f32 = 0.0015;
+    const SETTLE_MAX_S: f32 = 0.003;
+    const TICK_DECAY_S: f32 = 0.0007;
+    const HIGHPASS_HZ: f32 = 330.0;
+    const MUFFLE_HZ: f32 = 2000.0;
+    const ECHO_DELAY_S: f32 = 0.004;
+    const ECHO_FEEDBACK: f32 = 0.21;
+    const ECHO_LOWPASS_HZ: f32 = 50.0;
+    const ECHO_GAIN: f32 = 0.8;
+    const THUMP_HZ: f32 = 150.0;
+    const THUMP_GAIN: f32 = 0.25;
+    const THUMP_DECAY_S: f32 = 0.0025;
+    const OUTPUT_GAIN: f32 = 0.9;
+
     fn new(sample_rate: u32, duration_ms: u32, volume: u8) -> Self {
         let duration_samples = (sample_rate as u64 * duration_ms as u64 / 1000) as u32;
-        // Create delay buffer for echo (approximately 5-10ms delays)
-        let delay_samples = (sample_rate as f32 * 0.008) as usize; // 8ms delay
-        let delay_buffer = vec![0.0; delay_samples];
+        let mut rng = random_seed();
+        let resonances = Self::RESONANCES_HZ
+            .map(|f| f * (1.0 + Self::RESONANCE_JITTER * (2.0 * xorshift(&mut rng) - 1.0)));
+        let settle_at =
+            Self::SETTLE_MIN_S + (Self::SETTLE_MAX_S - Self::SETTLE_MIN_S) * xorshift(&mut rng);
         // Convert volume from 0-100 to 0.0-1.0 multiplier
         let volume_multiplier = volume as f32 / 100.0;
         ClickSound {
             sample_rate,
             duration_samples,
             current_sample: 0,
-            delay_buffer,
-            delay_buffer_pos: 0,
-            lowpass_state: 0.0,
+            rng,
+            resonances,
+            settle_at,
+            hp_prev_in: 0.0,
+            hp_prev_out: 0.0,
+            lp: [0.0; 2],
+            echo_buf: vec![0.0; ((sample_rate as f32 * Self::ECHO_DELAY_S) as usize).max(1)],
+            echo_pos: 0,
+            echo_lp: 0.0,
             volume: volume_multiplier,
         }
+    }
+
+    // One impulse hitting the mechanism, `t` seconds after it lands
+    fn excitation(&self, t: f32, noise: f32) -> f32 {
+        let tick = noise * Self::TICK_GAIN * (-t / Self::TICK_DECAY_S).exp();
+        let ring: f32 = (0..3)
+            .map(|i| {
+                (2.0 * std::f32::consts::PI * self.resonances[i] * t).sin()
+                    * Self::RESONANCE_GAIN[i]
+                    * (-t / Self::RING_DECAY_S[i]).exp()
+            })
+            .sum();
+        tick + ring
     }
 }
 
@@ -103,64 +174,44 @@ impl Iterator for ClickSound {
         let t = self.current_sample as f32 / self.sample_rate as f32;
         self.current_sample += 1;
 
-        // Generate a heavy, clunky mechanical sound (muffled as if inside a drive enclosure)
-        let base_frequency = 40.0; // Lower frequency for clunk sound
-        let phase = 2.0 * std::f32::consts::PI * base_frequency * t;
+        let noise = 2.0 * xorshift(&mut self.rng) - 1.0;
+        let mut signal = self.excitation(t, noise);
+        if t >= self.settle_at {
+            signal += Self::SETTLE_GAIN * self.excitation(t - self.settle_at, noise);
+        }
 
-        // Strong fundamental for heavy bass
-        let fundamental = phase.sin() * 2.0;
-
-        // Strong subharmonic for deep, heavy thunk
-        let subharmonic = (phase * 0.5).sin() * 0.6;
-
-        // Reduced harmonics for muffled effect (high frequencies are damped by enclosure)
-        let second_harmonic = (2.0 * phase).sin() * 0.12;
-        let third_harmonic = (3.0 * phase).sin() * 0.06;
-
-        // Add low-frequency noise for mechanical texture
-        let noise = (t * 100.0).sin() * 0.08;
-
-        // Combine all components (no high-frequency transients - muffled by enclosure)
-        let raw_signal = fundamental + subharmonic + second_harmonic + third_harmonic + noise;
-
-        // Apply envelope
-        let attack_time = 0.0001; // 0.1ms - sharp attack
-        let envelope = if t < attack_time {
-            // Exponential attack for sharper onset
-            (t / attack_time * 3.0).exp() / (3.0_f32.exp())
-        } else {
-            // Slower decay for heavier, more sustained clunk
-            (-(t - attack_time) * 18.0).exp()
-        };
-
-        let dry_signal = envelope * raw_signal;
-
-        // Apply low-pass filter for muffling effect (simulates sound damped by drive enclosure)
-        // Simple first-order low-pass filter
-        let cutoff = 800.0; // Low cutoff frequency for muffled sound
-        let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff);
+        // First-order high-pass to strip rumble; a seek click has almost no bass
+        let rc = 1.0 / (2.0 * std::f32::consts::PI * Self::HIGHPASS_HZ);
         let dt = 1.0 / self.sample_rate as f32;
-        let alpha = dt / (rc + dt);
-        self.lowpass_state = alpha * dry_signal + (1.0 - alpha) * self.lowpass_state;
-        let muffled_signal = self.lowpass_state;
+        let alpha = rc / (rc + dt);
+        self.hp_prev_out = alpha * (self.hp_prev_out + signal - self.hp_prev_in);
+        self.hp_prev_in = signal;
 
-        // Add echo/reverb effect (sound bouncing inside the drive enclosure)
-        let echo_delay = self.delay_buffer[self.delay_buffer_pos];
-        let echo_amount = 0.35; // Amount of echo
-        let echo_signal = muffled_signal + echo_delay * echo_amount;
+        // Enclosure and case soak up the highs
+        let lp_rc = 1.0 / (2.0 * std::f32::consts::PI * Self::MUFFLE_HZ);
+        let lp_alpha = dt / (lp_rc + dt);
+        self.lp[0] += lp_alpha * (self.hp_prev_out - self.lp[0]);
+        self.lp[1] += lp_alpha * (self.lp[0] - self.lp[1]);
 
-        // Store current sample in delay buffer for echo
-        self.delay_buffer[self.delay_buffer_pos] = muffled_signal * 0.6; // Slightly reduced for natural decay
-        self.delay_buffer_pos = (self.delay_buffer_pos + 1) % self.delay_buffer.len();
+        // Low thump bouncing around the case
+        let echo_rc = 1.0 / (2.0 * std::f32::consts::PI * Self::ECHO_LOWPASS_HZ);
+        let echo_alpha = dt / (echo_rc + dt);
+        let delayed = self.echo_buf[self.echo_pos];
+        self.echo_lp += echo_alpha * (signal + Self::ECHO_FEEDBACK * delayed - self.echo_lp);
+        self.echo_buf[self.echo_pos] = self.echo_lp;
+        self.echo_pos = (self.echo_pos + 1) % self.echo_buf.len();
 
-        // Additional subtle echo (longer delay)
-        let longer_delay_pos =
-            (self.delay_buffer_pos + self.delay_buffer.len() / 2) % self.delay_buffer.len();
-        let longer_echo = self.delay_buffer[longer_delay_pos] * 0.15;
-        let final_signal = echo_signal + longer_echo;
+        // Low body thump from the arm's mass jolting the drive, skips the bass cut
+        let thump = (2.0 * std::f32::consts::PI * Self::THUMP_HZ * t).sin()
+            * Self::THUMP_GAIN
+            * (-t / Self::THUMP_DECAY_S).exp();
 
-        // Apply volume multiplier to the final signal
-        Some(0.5 * final_signal * self.volume)
+        // Short fade-out so long tails don't get chopped into a pop at the end
+        let fade_samples = self.sample_rate as f32 * 0.003;
+        let fade = ((self.duration_samples - self.current_sample) as f32 / fade_samples).min(1.0);
+
+        let out = (self.lp[1] + Self::ECHO_GAIN * delayed + thump) * fade;
+        Some((Self::OUTPUT_GAIN * out * self.volume).clamp(-1.0, 1.0))
     }
 }
 
@@ -203,9 +254,14 @@ fn play_click(
         return;
     };
 
+    // Irregular 8-35ms gaps between clicks, like real seek patterns
+    let mut rng = random_seed();
+    let mut delay_ms = 0;
     for i in 0..click_count {
+        if i > 0 {
+            delay_ms += 8 + (27.0 * xorshift(&mut rng)) as u64;
+        }
         let handle = stream_handle.clone();
-        let delay_ms = i * 30; // 30ms delay between clicks
         let volume_clone = volume;
 
         runtime_handle.spawn(async move {
@@ -215,7 +271,7 @@ fn play_click(
 
             match Sink::try_new(&handle) {
                 Ok(sink) => {
-                    let click = ClickSound::new(44100, 25, volume_clone);
+                    let click = ClickSound::new(44100, 30, volume_clone);
                     sink.append(click);
                     tokio::task::spawn_blocking(move || {
                         sink.sleep_until_end();
@@ -491,6 +547,25 @@ mod tests {
         let duration = click.total_duration().unwrap();
         // 25ms should be approximately 25ms (allow small rounding)
         assert!(duration.as_millis() >= 24 && duration.as_millis() <= 26);
+    }
+
+    #[test]
+    fn test_click_sound_is_sharp_transient() {
+        let samples: Vec<f32> = ClickSound::new(44100, 30, 100).collect();
+        assert!(samples.iter().all(|s| s.abs() <= 1.0));
+        let peak_at = samples
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+            .unwrap()
+            .0;
+        // Loudest point should land in the first ~1ms, not a slow thump
+        assert!(peak_at < 44, "peak at sample {}", peak_at);
+        // Tail should have died down by the end
+        let tail = samples[samples.len() - 20..]
+            .iter()
+            .fold(0.0_f32, |m, s| m.max(s.abs()));
+        assert!(tail < 0.05, "tail amplitude {}", tail);
     }
 
     #[test]
