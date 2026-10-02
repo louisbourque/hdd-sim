@@ -15,12 +15,12 @@ use crate::{Drive, scan_hard_drives};
 
 // RusticOtter brand tokens, from rusticotter.ca/src/styles/global.css
 const OTTER: u32 = 0x544839;
-const INK: u32 = 0x473c2d;
-const MUTED: u32 = 0x584c3d;
+const INK: u32 = 0x2e2216;
+const MUTED: u32 = OTTER;
 const LAKE: u32 = 0x374756;
-const MOSS: u32 = 0x424e3f;
+const FLANNEL: u32 = 0x256236;
 const PARCHMENT: u32 = 0xf6f1e9;
-const LINEN: u32 = 0xebe3d6;
+const LINEN: u32 = 0xece4d7;
 const SANS: &str = "Inter";
 const DISPLAY: &str = "Zilla Slab";
 
@@ -458,7 +458,7 @@ fn slider_with_value(
         )
 }
 
-/// Switches read "on" in moss, the brand's success colour.
+/// Switches read "on" in flannel, the brand's success colour.
 fn switch(id: &'static str) -> Switch {
-    Switch::new(id).color(c(MOSS))
+    Switch::new(id).color(c(FLANNEL))
 }
